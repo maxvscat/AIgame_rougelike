@@ -2487,6 +2487,7 @@ func _show_top_notice(text: String, color := Color(1.0, 0.9, 0.22)) -> void:
 		return
 	var label := Label.new()
 	label.text = text
+	label.add_theme_font_override("font", load("res://assets/fonts/NotoSansCJKtc-Regular.otf"))
 	label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	label.offset_left = 0.0
 	label.offset_top = 36.0

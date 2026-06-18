@@ -16,6 +16,7 @@ const BOSS_CHARGE_DISTANCE := TILE_SIZE * 14.0
 const BOSS_CHARGE_WIDTH := BOSS_BODY_RADIUS * 6.0
 const BOSS_CHARGE_SPEED_MULTIPLIER := 5.0
 
+@onready var chinese_font = load("res://assets/fonts/NotoSansCJKtc-Regular.otf")
 @export var speed := 112.5
 @export var max_health := 48
 @export var touch_damage := 11
@@ -427,7 +428,7 @@ func _draw() -> void:
 			Vector2(body_radius * 0.9, body_radius * 0.72),
 			Vector2(-body_radius * 0.9, body_radius * 0.72)
 		]), color)
-		draw_string(ThemeDB.fallback_font, Vector2(-22.0, -34.0), "獵頭", HORIZONTAL_ALIGNMENT_LEFT, 48.0, 14, Color(0.85, 1.0, 0.85))
+		draw_string(chinese_font, Vector2(-22.0, -34.0), "獵頭", HORIZONTAL_ALIGNMENT_LEFT, 48.0, 14, Color(0.85, 1.0, 0.85))
 	else:
 		draw_circle(Vector2.ZERO, body_radius, color)
 		draw_circle(Vector2(-4.0, -3.0), 3.0, Color(0.22, 0.04, 0.04))
