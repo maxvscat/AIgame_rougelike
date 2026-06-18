@@ -16,7 +16,11 @@ const BOSS_CHARGE_DISTANCE := TILE_SIZE * 14.0
 const BOSS_CHARGE_WIDTH := BOSS_BODY_RADIUS * 6.0
 const BOSS_CHARGE_SPEED_MULTIPLIER := 5.0
 
-@onready var chinese_font = load("res://assets/fonts/NotoSansCJKtc-Regular.otf")
+@onready var chinese_font = load("res://AIgame_rougelike/assets/fonts/NotoSansCJKtc-Regular.otf")
+@onready var normal_texture: Texture2D = load("res://AIgame_rougelike/assets/art/enemies/normal/red_orb.png")
+@onready var elite_texture: Texture2D = load("res://AIgame_rougelike/assets/art/enemies/elite/purple_firewall.png")
+@onready var headhunter_texture: Texture2D = load("res://AIgame_rougelike/assets/art/enemies/headhunter/green_triangle.png")
+@onready var boss_texture: Texture2D = load("res://AIgame_rougelike/assets/art/enemies/boss/orange_market_crash_core.png")
 @export var speed := 112.5
 @export var max_health := 48
 @export var touch_damage := 11
@@ -40,6 +44,7 @@ var _headhunter_dash_end := Vector2.ZERO
 var _headhunter_warning_clear_timer := -1.0
 var _headhunter_warning_line: Line2D
 var _headhunter_sweep_ring: Line2D
+var _headhunter_sweep_flash: Line2D
 var _boss_charge_timer := 7.0
 var _boss_summon_timer := 10.0
 var _boss_crash_timer := 15.0
@@ -47,6 +52,7 @@ var _boss_scan_timer := 7.0
 var _boss_bullet_timer := 0.3
 var _boss_bullets_left := 50
 var _boss_reload_timer := 0.0
+var _elite_bullet_timer := randf_range(6.0, 10.0)
 var _boss_state := "chase"
 var _boss_state_timer := 0.0
 var _boss_dash_direction := Vector2.ZERO
@@ -57,6 +63,7 @@ var _skill_label_timer := 0.0
 var _skill_label_text := ""
 var _slow_timer := 0.0
 var _slow_multiplier := 1.0
+var _spawn_inactive_timer := 0.0
 
 
 func _ready() -> void:
@@ -67,6 +74,11 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(target) or health <= 0:
 		return
+	if _spawn_inactive_timer > 0.0:
+		_spawn_inactive_timer -= delta
+		if _spawn_inactive_timer <= 0.0:
+			modulate.a = 1.0
+		return
 
 	if enemy_kind == "headhunter":
 		_process_headhunter(delta)
@@ -74,6 +86,8 @@ func _physics_process(delta: float) -> void:
 		_process_boss(delta)
 	else:
 		_process_chase(delta)
+		if enemy_kind == "elite":
+			_process_elite_bullet(delta)
 
 	if _slow_timer > 0.0:
 		_slow_timer -= delta
@@ -131,11 +145,11 @@ func _process_headhunter(delta: float) -> void:
 				_headhunter_timer = HEADHUNTER_DASH_DISTANCE / max(1.0, _current_speed() * HEADHUNTER_DASH_SPEED_MULTIPLIER)
 				_headhunter_warning_clear_timer = 1.0
 		"dash":
-			velocity = _headhunter_dash_direction * _current_speed() * HEADHUNTER_DASH_SPEED_MULTIPLIER
-			move_and_slide()
+			velocity = Vector2.ZERO
+			global_position = global_position.move_toward(_headhunter_dash_end, _current_speed() * HEADHUNTER_DASH_SPEED_MULTIPLIER * delta)
 			_try_path_hit(touch_damage, _headhunter_dash_start, _headhunter_dash_end, HEADHUNTER_DASH_WIDTH, "_headhunter_dash_hit")
 			_headhunter_timer -= delta
-			if _headhunter_timer <= 0.0:
+			if _headhunter_timer <= 0.0 or global_position.distance_to(_headhunter_dash_end) <= 4.0:
 				velocity = Vector2.ZERO
 				_start_headhunter_sweep()
 		"sweep_prepare":
@@ -163,11 +177,11 @@ func _process_boss(delta: float) -> void:
 				_boss_state_timer = BOSS_CHARGE_DISTANCE / max(1.0, _current_speed() * BOSS_CHARGE_SPEED_MULTIPLIER)
 				_boss_dash_hit = false
 		"charge":
-			velocity = _boss_dash_direction * _current_speed() * BOSS_CHARGE_SPEED_MULTIPLIER
-			move_and_slide()
+			velocity = Vector2.ZERO
+			global_position = global_position.move_toward(_boss_dash_end, _current_speed() * BOSS_CHARGE_SPEED_MULTIPLIER * delta)
 			_try_path_hit(max(1, int(round(float(touch_damage) * 0.5))), _boss_dash_start, _boss_dash_end, BOSS_CHARGE_WIDTH, "_boss_dash_hit", true)
 			_boss_state_timer -= delta
-			if _boss_state_timer <= 0.0:
+			if _boss_state_timer <= 0.0 or global_position.distance_to(_boss_dash_end) <= 4.0:
 				_boss_state = "recover"
 				_boss_state_timer = 0.7
 				velocity = Vector2.ZERO
@@ -236,6 +250,16 @@ func _process_boss_bullets(delta: float) -> void:
 		_boss_reload_timer = 5.0
 
 
+func _process_elite_bullet(delta: float) -> void:
+	if not is_instance_valid(target):
+		return
+	_elite_bullet_timer -= delta
+	if _elite_bullet_timer > 0.0:
+		return
+	_elite_bullet_timer = randf_range(6.0, 10.0)
+	special_requested.emit(self, "elite_bullet", target.global_position)
+
+
 func _start_headhunter_dash_lock(direction: Vector2) -> void:
 	velocity = Vector2.ZERO
 	_headhunter_state = "lock"
@@ -280,6 +304,7 @@ func _clear_headhunter_warning_line() -> void:
 	if is_instance_valid(_headhunter_warning_line):
 		_headhunter_warning_line.queue_free()
 	_headhunter_warning_line = null
+	_headhunter_warning_clear_timer = -1.0
 
 
 func _create_headhunter_sweep_ring() -> void:
@@ -301,11 +326,18 @@ func _create_headhunter_sweep_flash() -> void:
 	var parent := get_parent()
 	if parent == null:
 		return
-	var ring := _create_world_ring(global_position, HEADHUNTER_SWEEP_RADIUS, Color(0.2, 1.0, 0.35, 0.82), 10.0)
-	parent.add_child(ring)
+	_clear_headhunter_sweep_flash()
+	_headhunter_sweep_flash = _create_world_ring(global_position, HEADHUNTER_SWEEP_RADIUS, Color(0.2, 1.0, 0.35, 0.82), 10.0)
+	parent.add_child(_headhunter_sweep_flash)
 	var tween := create_tween()
-	tween.tween_property(ring, "modulate:a", 0.0, 0.22)
-	tween.tween_callback(ring.queue_free)
+	tween.tween_property(_headhunter_sweep_flash, "modulate:a", 0.0, 0.22)
+	tween.tween_callback(_clear_headhunter_sweep_flash)
+
+
+func _clear_headhunter_sweep_flash() -> void:
+	if is_instance_valid(_headhunter_sweep_flash):
+		_headhunter_sweep_flash.queue_free()
+	_headhunter_sweep_flash = null
 
 
 func _create_world_ring(center: Vector2, radius: float, color: Color, width: float) -> Line2D:
@@ -378,6 +410,11 @@ func apply_slow(multiplier: float, duration: float) -> void:
 	_slow_timer = max(_slow_timer, duration)
 
 
+func set_spawn_inactive(duration: float) -> void:
+	_spawn_inactive_timer = max(duration, 0.0)
+	modulate.a = 0.5 if _spawn_inactive_timer > 0.0 else 1.0
+
+
 func _current_speed() -> float:
 	return speed * _slow_multiplier
 
@@ -395,8 +432,19 @@ func take_damage(amount: int) -> void:
 	queue_redraw()
 
 	if health <= 0:
+		_clear_headhunter_effects()
 		died.emit(global_position, xp_value, enemy_kind)
 		queue_free()
+
+
+func _exit_tree() -> void:
+	_clear_headhunter_effects()
+
+
+func _clear_headhunter_effects() -> void:
+	_clear_headhunter_warning_line()
+	_clear_headhunter_sweep_ring()
+	_clear_headhunter_sweep_flash()
 
 
 func _draw() -> void:
@@ -422,7 +470,26 @@ func _draw() -> void:
 	elif enemy_kind == "stage_boss":
 		body_radius = 36.0
 
-	if enemy_kind == "headhunter":
+	var texture := normal_texture
+	if enemy_kind == "elite":
+		texture = elite_texture
+	elif enemy_kind == "headhunter":
+		texture = headhunter_texture
+	elif enemy_kind == "boss" or enemy_kind == "small_boss" or enemy_kind == "stage_boss":
+		texture = boss_texture
+
+	if texture != null:
+		var texture_size := body_radius * 2.55
+		if enemy_kind == "boss" or enemy_kind == "small_boss":
+			texture_size = body_radius * 2.7
+		elif enemy_kind == "stage_boss":
+			texture_size = body_radius * 2.8
+		draw_texture_rect(texture, Rect2(Vector2(-texture_size * 0.5, -texture_size * 0.5), Vector2(texture_size, texture_size)), false, color.lightened(0.12) if _hit_flash_timer > 0.0 else Color.WHITE)
+		if enemy_kind == "headhunter":
+			draw_string(chinese_font, Vector2(-22.0, -34.0), "獵頭", HORIZONTAL_ALIGNMENT_LEFT, 48.0, 14, Color(0.85, 1.0, 0.85))
+		elif enemy_kind == "boss":
+			draw_string(chinese_font, Vector2(-18.0, -44.0), "boss", HORIZONTAL_ALIGNMENT_LEFT, 48.0, 14, Color(1.0, 0.88, 0.5))
+	elif enemy_kind == "headhunter":
 		draw_colored_polygon(PackedVector2Array([
 			Vector2(0.0, -body_radius),
 			Vector2(body_radius * 0.9, body_radius * 0.72),
@@ -434,10 +501,10 @@ func _draw() -> void:
 		draw_circle(Vector2(-4.0, -3.0), 3.0, Color(0.22, 0.04, 0.04))
 		draw_circle(Vector2(4.0, -3.0), 3.0, Color(0.22, 0.04, 0.04))
 		if enemy_kind == "boss":
-			draw_string(ThemeDB.fallback_font, Vector2(-18.0, -44.0), "boss", HORIZONTAL_ALIGNMENT_LEFT, 48.0, 14, Color(1.0, 0.88, 0.5))
+			draw_string(chinese_font, Vector2(-18.0, -44.0), "boss", HORIZONTAL_ALIGNMENT_LEFT, 48.0, 14, Color(1.0, 0.88, 0.5))
 
 	var health_ratio: float = clamp(float(health) / float(max_health), 0.0, 1.0)
 	draw_rect(Rect2(Vector2(-16.0, -25.0), Vector2(32.0, 4.0)), Color(0.18, 0.02, 0.02))
 	draw_rect(Rect2(Vector2(-16.0, -25.0), Vector2(32.0 * health_ratio, 4.0)), Color(0.4, 1.0, 0.32))
 	if _skill_label_timer > 0.0 and not _skill_label_text.is_empty():
-		draw_string(ThemeDB.fallback_font, Vector2(-44.0, -52.0), _skill_label_text, HORIZONTAL_ALIGNMENT_LEFT, 120.0, 16, Color(1.0, 0.92, 0.2))
+		draw_string(chinese_font, Vector2(-44.0, -52.0), _skill_label_text, HORIZONTAL_ALIGNMENT_LEFT, 120.0, 16, Color(1.0, 0.92, 0.2))

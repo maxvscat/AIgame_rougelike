@@ -61,10 +61,18 @@ var _attack_timer := 0.0
 var _hit_flash_timer := 0.0
 var _attack_count := 0
 var _regen_pool := 0.0
+var _dash_cooldown_timer := 0.0
+var _dash_timer := 0.0
+var _dash_direction := Vector2.RIGHT
+var _last_move_direction := Vector2.RIGHT
+var _player_texture: Texture2D
+var _lucky_cat_texture: Texture2D
 
 
 func _ready() -> void:
 	add_to_group("player")
+	_player_texture = load("res://AIgame_rougelike/assets/art/characters/player/player_core.png")
+	_lucky_cat_texture = load("res://AIgame_rougelike/assets/art/characters/pets/lucky_cat.png")
 	health = max_health
 	stats_changed.emit()
 
@@ -74,7 +82,14 @@ func _physics_process(delta: float) -> void:
 		return
 
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	velocity = input_direction * speed
+	if input_direction.length() > 0.001:
+		_last_move_direction = input_direction.normalized()
+	_dash_cooldown_timer = max(_dash_cooldown_timer - delta, 0.0)
+	if _dash_timer > 0.0:
+		_dash_timer -= delta
+		velocity = _dash_direction * speed * 3.2
+	else:
+		velocity = input_direction * speed
 	move_and_slide()
 
 	if regen_per_second > 0.0 and health < max_health:
@@ -91,6 +106,14 @@ func _physics_process(delta: float) -> void:
 	if _hit_flash_timer > 0.0:
 		_hit_flash_timer -= delta
 		queue_redraw()
+
+
+func request_dash() -> void:
+	if health <= 0 or _dash_cooldown_timer > 0.0 or _dash_timer > 0.0:
+		return
+	_dash_direction = _last_move_direction
+	_dash_timer = 0.14
+	_dash_cooldown_timer = 1.0
 
 
 func _auto_attack() -> void:
@@ -267,7 +290,7 @@ func _apply_level_stat_growth() -> void:
 	max_health = max(max_health + 1, int(round(float(max_health) * 1.10)))
 	health = min(max_health, health + max_health - old_max)
 	pickup_range_multiplier *= 1.05
-	crit_chance += 0.05
+	crit_chance += 0.02
 
 
 func add_token(amount: int) -> void:
@@ -397,9 +420,15 @@ func _draw() -> void:
 		draw_circle(Vector2.ZERO, aura_radius, Color(0.95, 0.15, 0.35, 0.12))
 		draw_arc(Vector2.ZERO, aura_radius, 0.0, TAU, 96, Color(1.0, 0.2, 0.4, 0.45), 3.0)
 
-	draw_circle(Vector2.ZERO, 16.0, body_color)
-	draw_circle(Vector2(5.0, -5.0), 4.0, Color(0.85, 0.95, 1.0))
+	if _player_texture != null:
+		draw_texture_rect(_player_texture, Rect2(Vector2(-24.0, -24.0), Vector2(48.0, 48.0)), false, body_color.lightened(0.18) if _hit_flash_timer > 0.0 else Color.WHITE)
+	else:
+		draw_circle(Vector2.ZERO, 16.0, body_color)
+		draw_circle(Vector2(5.0, -5.0), 4.0, Color(0.85, 0.95, 1.0))
 
 	if get_skill_level("lucky_cat") > 0:
-		draw_circle(Vector2(-24.0, 18.0), 8.0, Color(1.0, 0.72, 0.18))
-		draw_circle(Vector2(-21.0, 16.0), 2.0, Color(0.2, 0.12, 0.05))
+		if _lucky_cat_texture != null:
+			draw_texture_rect(_lucky_cat_texture, Rect2(Vector2(-40.0, 2.0), Vector2(28.0, 28.0)), false)
+		else:
+			draw_circle(Vector2(-24.0, 18.0), 8.0, Color(1.0, 0.72, 0.18))
+			draw_circle(Vector2(-21.0, 16.0), 2.0, Color(0.2, 0.12, 0.05))

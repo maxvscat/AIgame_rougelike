@@ -8,6 +8,7 @@ const BossBulletScript := preload("res://AIgame_rougelike/scripts/boss_bullet.gd
 
 const GAME_DURATION_SECONDS := 600.0
 const SAVE_PATH := "user://save_slots.json"
+const SETTINGS_PATH := "user://settings.json"
 const SAVE_SLOT_COUNT := 5
 const SLOT_BASE_TOKEN_COST := 10
 const SLOT_COST_PER_MINUTE := 10
@@ -15,7 +16,8 @@ const NORMAL_TOKEN_DROP_CHANCE := 0.36
 const ELITE_TOKEN_DROP_CHANCE := 0.7
 const HEADHUNTER_TOKEN_DROP_AMOUNT := 5
 const BOSS_TOKEN_DROP_AMOUNT := 20
-const BOSS_CHIP_DROP_AMOUNT := 20
+const BOSS_CHIP_DROP_AMOUNT := 10
+const WIN_CHIP_REWARD_AMOUNT := 10
 const HEADHUNTER_CHIP_DROP_AMOUNT := 5
 const BASE_TWO_LINE_CHANCE := 0.25
 const BASE_THREE_LINE_CHANCE := 0.06
@@ -36,6 +38,7 @@ const ELECTRIC_FENCE_DAMAGE_INTERVAL := 0.5
 const ELECTRIC_FENCE_SHRINK_AMOUNT := TILE_SIZE
 const ELECTRIC_FENCE_KNOCKBACK := TILE_SIZE * 0.5
 const DISABLED_LEVEL_UP_SKILLS := ["crit", "damage", "attack_speed", "experience", "move_speed"]
+const DASH_BLOCKED_KEYCODES := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT]
 const SLOT_BASE_SYMBOLS := ["J", "Q", "K", "A"]
 const BOSS_SPAWN_TIMES := [300.0, 600.0]
 const SLOT_SMALL_REWARD_IDS := ["bomb", "thunder", "fire", "ice", "missile"]
@@ -89,21 +92,22 @@ var slot_reward_overlay: Control
 var pause_overlay: Control
 var confirm_overlay: Control
 var confirm_label: Label
+var dash_bind_button: Button
 var pending_new_slot := -1
 var research_slot_index := 0
+var waiting_rebind_action := ""
 
 var slot_panel: PanelContainer
 var slot_money_label: Label
 var slot_cost_label: Label
 var slot_result_label: Label
 var slot_reel_labels: Array[Label] = []
-var slot_spin_button: Button
-var slot_auto_button: Button
+var slot_auto_status_label: Label
 var slot_popup_label: Label
 var hud_equipped_panel: PanelContainer
 var hud_equipped_label: Label
 var is_slot_spinning := false
-var auto_spin_enabled := false
+var auto_spin_enabled := true
 var slot_popup_tween: Tween
 var pending_level_choices := 0
 var is_level_up_menu_open := false
@@ -122,6 +126,7 @@ var electric_fence_half_extents := Vector2.ZERO
 var electric_fence_shrink_timer := ELECTRIC_FENCE_SHRINK_INTERVAL
 var electric_fence_damage_timer := ELECTRIC_FENCE_DAMAGE_INTERVAL
 var electric_fence_line: Line2D
+var map_tile_texture: Texture2D
 
 var slot_symbols := {
 	"J": {"name": "J", "weight": 24},
@@ -160,6 +165,9 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().paused = true
 	rng.randomize()
+	map_tile_texture = load("res://AIgame_rougelike/assets/art/map/data_wasteland_tile.png")
+	_ensure_runtime_input_actions()
+	_load_settings()
 	_normalize_slot_symbol_names()
 	_normalize_upgrade_defs()
 	_reset_slot_run_state()
@@ -206,6 +214,159 @@ func _normalize_upgrade_defs() -> void:
 			upgrade_defs[skill_id]["effect"] = names[skill_id][1]
 
 
+func _ensure_runtime_input_actions() -> void:
+	if not InputMap.has_action("dash"):
+		InputMap.add_action("dash", 0.5)
+	if InputMap.action_get_events("dash").is_empty():
+		var space := InputEventKey.new()
+		space.keycode = KEY_SPACE
+		InputMap.action_add_event("dash", space)
+		var right_mouse := InputEventMouseButton.new()
+		right_mouse.button_index = MOUSE_BUTTON_RIGHT
+		InputMap.action_add_event("dash", right_mouse)
+	_sanitize_dash_events()
+
+
+func _load_settings() -> void:
+	if not FileAccess.file_exists(SETTINGS_PATH):
+		return
+	var file := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
+	var parsed = JSON.parse_string(file.get_as_text())
+	if not (parsed is Dictionary):
+		return
+	var settings: Dictionary = parsed
+	if settings.has("dash_events"):
+		_apply_serialized_input_events("dash", settings["dash_events"])
+	_sanitize_dash_events()
+
+
+func _save_settings() -> void:
+	var settings := {
+		"dash_events": _serialize_input_events("dash")
+	}
+	var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
+	file.store_string(JSON.stringify(settings, "\t"))
+
+
+func _serialize_input_events(action_name: String) -> Array:
+	var serialized := []
+	for event in InputMap.action_get_events(action_name):
+		if event is InputEventKey:
+			serialized.append({"type": "key", "keycode": event.keycode})
+		elif event is InputEventMouseButton:
+			serialized.append({"type": "mouse", "button_index": event.button_index})
+	return serialized
+
+
+func _apply_serialized_input_events(action_name: String, events: Variant) -> void:
+	if not InputMap.has_action(action_name):
+		InputMap.add_action(action_name, 0.5)
+	InputMap.action_erase_events(action_name)
+	if not (events is Array):
+		return
+	for entry in events:
+		if not (entry is Dictionary):
+			continue
+		var data: Dictionary = entry
+		match str(data.get("type", "")):
+			"key":
+				var key_event := InputEventKey.new()
+				key_event.keycode = int(data.get("keycode", KEY_SPACE))
+				InputMap.action_add_event(action_name, key_event)
+			"mouse":
+				var mouse_event := InputEventMouseButton.new()
+				mouse_event.button_index = int(data.get("button_index", MOUSE_BUTTON_RIGHT))
+				InputMap.action_add_event(action_name, mouse_event)
+	if InputMap.action_get_events(action_name).is_empty():
+		_ensure_runtime_input_actions()
+	if action_name == "dash":
+		_sanitize_dash_events()
+
+
+func _try_capture_rebind_event(event: InputEvent) -> bool:
+	if not event.is_pressed():
+		return false
+	if event is InputEventKey:
+		if waiting_rebind_action == "dash" and _is_blocked_dash_key(event.keycode):
+			if dash_bind_button != null:
+				dash_bind_button.text = "衝刺不能使用移動鍵，請重按"
+			return true
+		var key_event := InputEventKey.new()
+		key_event.keycode = event.keycode
+		_set_single_input_event(waiting_rebind_action, key_event)
+		return true
+	if event is InputEventMouseButton:
+		var mouse_event := InputEventMouseButton.new()
+		mouse_event.button_index = event.button_index
+		_set_single_input_event(waiting_rebind_action, mouse_event)
+		return true
+	return false
+
+
+func _is_blocked_dash_key(keycode: int) -> bool:
+	return DASH_BLOCKED_KEYCODES.has(keycode)
+
+
+func _sanitize_dash_events() -> void:
+	if not InputMap.has_action("dash"):
+		return
+	var existing_events := InputMap.action_get_events("dash")
+	var sanitized: Array[InputEvent] = []
+	for event in existing_events:
+		if event is InputEventKey and _is_blocked_dash_key(event.keycode):
+			continue
+		sanitized.append(event)
+	if sanitized.size() == existing_events.size() and not sanitized.is_empty():
+		return
+	InputMap.action_erase_events("dash")
+	for event in sanitized:
+		InputMap.action_add_event("dash", event)
+	if InputMap.action_get_events("dash").is_empty():
+		var space := InputEventKey.new()
+		space.keycode = KEY_SPACE
+		InputMap.action_add_event("dash", space)
+		var right_mouse := InputEventMouseButton.new()
+		right_mouse.button_index = MOUSE_BUTTON_RIGHT
+		InputMap.action_add_event("dash", right_mouse)
+
+
+func _set_single_input_event(action_name: String, event: InputEvent) -> void:
+	if not InputMap.has_action(action_name):
+		InputMap.add_action(action_name, 0.5)
+	InputMap.action_erase_events(action_name)
+	InputMap.action_add_event(action_name, event)
+	waiting_rebind_action = ""
+	_save_settings()
+	_update_settings_input_text()
+
+
+func _input_event_display_text(event: InputEvent) -> String:
+	if event is InputEventKey:
+		return OS.get_keycode_string(event.keycode)
+	if event is InputEventMouseButton:
+		match event.button_index:
+			MOUSE_BUTTON_LEFT:
+				return "滑鼠左鍵"
+			MOUSE_BUTTON_RIGHT:
+				return "滑鼠右鍵"
+			MOUSE_BUTTON_MIDDLE:
+				return "滑鼠中鍵"
+		return "滑鼠按鍵 %d" % int(event.button_index)
+	return "未設定"
+
+
+func _action_events_text(action_name: String) -> String:
+	var names := []
+	for event in InputMap.action_get_events(action_name):
+		names.append(_input_event_display_text(event))
+	return " / ".join(names) if not names.is_empty() else "未設定"
+
+
+func _update_settings_input_text() -> void:
+	if dash_bind_button != null:
+		dash_bind_button.text = "衝刺：%s" % _action_events_text("dash")
+
+
 func _process(delta: float) -> void:
 	if get_tree().paused or not game_started:
 		return
@@ -231,13 +392,18 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not waiting_rebind_action.is_empty():
+		if _try_capture_rebind_event(event):
+			get_viewport().set_input_as_handled()
+		return
+
 	if is_game_ended and (event.is_action_pressed("restart") or event.is_action_pressed("ui_accept")):
 		_return_to_lobby_after_run()
 		get_viewport().set_input_as_handled()
 		return
 
-	if game_started and not get_tree().paused and event.is_action_pressed("restart"):
-		_spin_slot()
+	if _is_dash_input_event(event):
+		player.request_dash()
 		get_viewport().set_input_as_handled()
 		return
 
@@ -256,12 +422,38 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
+func _is_dash_input_event(event: InputEvent) -> bool:
+	if not game_started or is_game_ended or get_tree().paused or not is_instance_valid(player):
+		return false
+	if event is InputEventKey:
+		if event.echo or _is_blocked_dash_key(event.keycode):
+			return false
+	elif not (event is InputEventMouseButton):
+		return false
+	if is_slot_reward_menu_open or is_level_up_menu_open or not _is_no_menu_overlay_open():
+		return false
+	return event.is_action_pressed("dash", false, true)
+
+
 func _draw() -> void:
 	if not is_instance_valid(player):
 		return
 	var viewport_size := get_viewport_rect().size
 	var camera_center := player.global_position
 	var top_left := camera_center - viewport_size * 0.5
+	if map_tile_texture != null:
+		var tile_size := 128.0
+		var start_x: float = floor((top_left.x - 128.0) / tile_size) * tile_size
+		var end_x: float = top_left.x + viewport_size.x + 128.0
+		var start_y: float = floor((top_left.y - 128.0) / tile_size) * tile_size
+		var end_y: float = top_left.y + viewport_size.y + 128.0
+		var tile_x: float = start_x
+		while tile_x <= end_x:
+			var tile_y: float = start_y
+			while tile_y <= end_y:
+				draw_texture_rect(map_tile_texture, Rect2(Vector2(tile_x, tile_y), Vector2(tile_size, tile_size)), false)
+				tile_y += tile_size
+			tile_x += tile_size
 	var grid_color := Color(0.16, 0.18, 0.2, 0.45)
 	for x in range(int(floor(top_left.x / 64.0)) * 64, int(top_left.x + viewport_size.x) + 64, 64):
 		draw_line(Vector2(x, top_left.y - 64.0), Vector2(x, top_left.y + viewport_size.y + 64.0), grid_color, 1.0)
@@ -443,8 +635,13 @@ func _create_fixed_slot_ui(parent: Control) -> void:
 	slot_money_label.add_theme_font_size_override("font_size", 18)
 	box.add_child(slot_money_label)
 
+	slot_auto_status_label = Label.new()
+	slot_auto_status_label.text = "自動轉動：開啟"
+	slot_auto_status_label.add_theme_font_size_override("font_size", 16)
+	box.add_child(slot_auto_status_label)
+
 	slot_cost_label = Label.new()
-	slot_cost_label.text = "每次轉動：10 Token｜每分鐘 +10｜Space 或按鈕"
+	slot_cost_label.text = "每次轉動：10 Token｜每分鐘 +10｜Token 足夠自動轉"
 	slot_cost_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(slot_cost_label)
 
@@ -462,23 +659,8 @@ func _create_fixed_slot_ui(parent: Control) -> void:
 		reel_row.add_child(reel)
 		slot_reel_labels.append(reel)
 
-	var button_row := HBoxContainer.new()
-	button_row.add_theme_constant_override("separation", 8)
-	box.add_child(button_row)
-
-	slot_spin_button = Button.new()
-	slot_spin_button.text = "Spin"
-	slot_spin_button.pressed.connect(_spin_slot)
-	button_row.add_child(slot_spin_button)
-
-	slot_auto_button = Button.new()
-	slot_auto_button.text = "Auto：關"
-	slot_auto_button.toggle_mode = true
-	slot_auto_button.toggled.connect(_set_auto_spin)
-	button_row.add_child(slot_auto_button)
-
 	slot_result_label = Label.new()
-	slot_result_label.text = "等待轉動"
+	slot_result_label.text = "等待 Token"
 	slot_result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	slot_result_label.custom_minimum_size = Vector2(300.0, 56.0)
 	box.add_child(slot_result_label)
@@ -624,9 +806,16 @@ func _create_settings_overlay(canvas: CanvasLayer) -> void:
 	)
 	box.add_child(fullscreen_check)
 	var key_label := Label.new()
-	key_label.text = "按鍵：WASD 移動，Space 轉動 Slot / 重新開始，ESC 暫停 / 恢復"
+	key_label.text = "按鍵：WASD 移動，Space / 滑鼠右鍵衝刺，ESC 暫停 / 恢復。死亡或過關後 Space 返回大廳。"
 	key_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(key_label)
+	dash_bind_button = Button.new()
+	dash_bind_button.text = "衝刺：%s" % _action_events_text("dash")
+	dash_bind_button.pressed.connect(func() -> void:
+		waiting_rebind_action = "dash"
+		dash_bind_button.text = "衝刺：請按新的按鍵或滑鼠鍵"
+	)
+	box.add_child(dash_bind_button)
 	var back_button := Button.new()
 	back_button.text = "返回"
 	back_button.pressed.connect(_show_main_menu)
@@ -665,6 +854,7 @@ func _reset_slot_run_state() -> void:
 	_reset_small_skill_timers()
 	is_slot_reward_menu_open = false
 	current_slot_reward_kind = ""
+	auto_spin_enabled = true
 
 
 func _reset_small_skill_timers() -> void:
@@ -895,7 +1085,7 @@ func _reset_run_state() -> void:
 	if is_instance_valid(electric_fence_line):
 		electric_fence_line.queue_free()
 	electric_fence_line = null
-	auto_spin_enabled = false
+	auto_spin_enabled = true
 	is_slot_spinning = false
 	is_slot_reward_menu_open = false
 	burning_enemies.clear()
@@ -916,9 +1106,6 @@ func _reset_run_state() -> void:
 	game_over_label.visible = false
 	settlement_label.visible = false
 	slot_popup_label.visible = false
-	if slot_auto_button != null:
-		slot_auto_button.button_pressed = false
-		slot_auto_button.text = "Auto：關"
 	if spawn_timer != null:
 		spawn_timer.stop()
 		spawn_timer.wait_time = 0.9
@@ -1347,7 +1534,7 @@ func _configure_enemy_kind(enemy: Node, enemy_kind: String) -> void:
 			enemy.separation_distance *= 1.5
 			enemy.xp_value *= 5
 		"boss":
-			enemy.max_health *= 18
+			enemy.max_health = int(round(float(enemy.max_health) * 18.0 * 2.5))
 			enemy.health = enemy.max_health
 			enemy.speed = float(player.speed) * 0.8 if is_instance_valid(player) else enemy.speed * 0.68
 			enemy.touch_damage *= 3
@@ -1653,7 +1840,6 @@ func _spin_slot() -> void:
 		slot_result_label.text = "Slot 代幣不足，無法轉動。"
 		return
 	is_slot_spinning = true
-	slot_spin_button.disabled = true
 	slot_result_label.text = "轉輪中..."
 	for tick in range(6):
 		for reel in slot_reel_labels:
@@ -1671,7 +1857,6 @@ func _spin_slot() -> void:
 			slot_reel_labels[index].text = _symbol_name(result[index])
 		_resolve_slot_result(result)
 	is_slot_spinning = false
-	slot_spin_button.disabled = player.slot_tokens < _get_slot_cost()
 	_update_slot_ui()
 	if pending_level_choices > 0 and not get_tree().paused and not _get_available_upgrade_ids().is_empty():
 		_show_level_up_choices()
@@ -1679,16 +1864,6 @@ func _spin_slot() -> void:
 
 func _get_slot_cost() -> int:
 	return SLOT_BASE_TOKEN_COST + int(floor(elapsed_time / 60.0)) * SLOT_COST_PER_MINUTE
-
-
-func _set_auto_spin(enabled: bool) -> void:
-	auto_spin_enabled = enabled
-	if slot_auto_button != null:
-		slot_auto_button.text = "Auto：開" if enabled else "Auto：關"
-
-
-	if slot_auto_button != null:
-		slot_auto_button.text = "Auto：開" if enabled else "Auto：關"
 
 
 func _roll_weighted_symbol() -> String:
@@ -2210,7 +2385,7 @@ func _on_enemy_special_requested(enemy: Node2D, skill_id: String, target_positio
 		return
 	match skill_id:
 		"summon_ai":
-			_spawn_boss_elites(enemy.global_position, rng.randi_range(20, 30))
+			_spawn_boss_elites(enemy.global_position, 15)
 		"stock_crash":
 			_trigger_boss_stock_crash(target_position)
 		"scan_laser":
@@ -2219,6 +2394,8 @@ func _on_enemy_special_requested(enemy: Node2D, skill_id: String, target_positio
 			_trigger_boss_charge_warning(enemy.global_position, target_position)
 		"boss_bullet":
 			_spawn_boss_bullet(enemy.global_position, target_position)
+		"elite_bullet":
+			_spawn_elite_bullet(enemy, target_position)
 
 
 func _spawn_boss_elites(origin: Vector2, amount: int) -> void:
@@ -2230,6 +2407,8 @@ func _spawn_boss_elites(origin: Vector2, amount: int) -> void:
 		_configure_enemy_kind(enemy, "elite")
 		enemy.scale_combat_stats(_get_enemy_growth_multiplier())
 		enemy.global_position = _get_random_visible_position(48.0)
+		if enemy.has_method("set_spawn_inactive"):
+			enemy.set_spawn_inactive(1.5)
 		enemy.died.connect(_on_enemy_died)
 		enemy.damaged.connect(_on_enemy_damaged)
 		if enemy.has_signal("special_requested"):
@@ -2257,6 +2436,19 @@ func _spawn_boss_bullet(origin: Vector2, target_position: Vector2) -> void:
 	var bullet_speed: float = float(player.speed) * 1.5
 	var bullet_damage: int = max(1, int(round(11.0 * _get_enemy_growth_multiplier())))
 	bullet.call("setup", origin, target_position, bullet_speed, bullet_damage, player)
+
+
+func _spawn_elite_bullet(enemy: Node2D, target_position: Vector2) -> void:
+	if not is_instance_valid(player) or not is_instance_valid(enemy):
+		return
+	var bullet: Node2D = BossBulletScript.new()
+	bullet.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(bullet)
+	var enemy_speed_value: Variant = enemy.get("speed")
+	var enemy_damage_value: Variant = enemy.get("touch_damage")
+	var bullet_speed: float = float(enemy_speed_value) * 1.5 if enemy_speed_value != null else 180.0
+	var bullet_damage: int = int(enemy_damage_value) if enemy_damage_value != null else 1
+	bullet.call("setup", enemy.global_position, target_position, bullet_speed, bullet_damage, player, Color(0.9, 0.22, 1.0))
 
 
 func _trigger_boss_stock_crash(center: Vector2) -> void:
@@ -2363,8 +2555,6 @@ func _random_small_offset() -> Vector2:
 
 func _roll_chip_drop(enemy_kind: String) -> int:
 	match enemy_kind:
-		"elite":
-			return 1 if rng.randf() < 0.5 else 0
 		"headhunter":
 			return HEADHUNTER_CHIP_DROP_AMOUNT
 		"boss":
@@ -2461,8 +2651,9 @@ func _update_slot_ui() -> void:
 		return
 	var slot_cost := _get_slot_cost()
 	slot_money_label.text = "Slot代幣：%d" % player.slot_tokens
-	slot_cost_label.text = "每次轉動：%d Token｜Space 或按鈕" % slot_cost
-	slot_spin_button.disabled = is_slot_spinning or player.slot_tokens < slot_cost
+	slot_cost_label.text = "每次轉動：%d Token｜Token 足夠自動轉" % slot_cost
+	if slot_auto_status_label != null:
+		slot_auto_status_label.text = "自動轉動：開啟"
 
 
 func _show_slot_popup(text: String) -> void:
@@ -2487,7 +2678,7 @@ func _show_top_notice(text: String, color := Color(1.0, 0.9, 0.22)) -> void:
 		return
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_override("font", load("res://assets/fonts/NotoSansCJKtc-Regular.otf"))
+	label.add_theme_font_override("font", load("res://AIgame_rougelike/assets/fonts/NotoSansCJKtc-Regular.otf"))
 	label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	label.offset_left = 0.0
 	label.offset_top = 36.0
@@ -2623,6 +2814,8 @@ func _end_game(win: bool) -> void:
 		return
 	is_game_ended = true
 	did_win = win
+	if win:
+		player.add_chip(WIN_CHIP_REWARD_AMOUNT)
 	total_chips += player.chip_pickups
 	_save_current_slot()
 	if not win:

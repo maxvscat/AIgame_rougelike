@@ -1,0 +1,292 @@
+[
+  {
+    "category": "角色區",
+    "id": "player_core",
+    "name": "玩家：晶片拾荒者",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/characters/player/player_core.png",
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "player",
+      "角色"
+    ]
+  },
+  {
+    "category": "角色區",
+    "id": "lucky_cat",
+    "name": "招財貓：資料招財機",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/characters/pets/lucky_cat.png",
+    "width": 96,
+    "height": 96,
+    "tags": [
+      "pet",
+      "大獎"
+    ]
+  },
+  {
+    "category": "怪物區",
+    "id": "enemy_normal",
+    "name": "普通怪：紅色感染球",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/enemies/normal/red_orb.png",
+    "width": 96,
+    "height": 96,
+    "tags": [
+      "enemy",
+      "normal"
+    ]
+  },
+  {
+    "category": "怪物區",
+    "id": "enemy_elite",
+    "name": "菁英怪：紫色防火牆核心",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/enemies/elite/purple_firewall.png",
+    "width": 112,
+    "height": 112,
+    "tags": [
+      "enemy",
+      "elite",
+      "bullet"
+    ]
+  },
+  {
+    "category": "怪物區",
+    "id": "enemy_headhunter",
+    "name": "獵頭：綠色追獵三角",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/enemies/headhunter/green_triangle.png",
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "enemy",
+      "headhunter"
+    ]
+  },
+  {
+    "category": "怪物區",
+    "id": "enemy_boss",
+    "name": "Boss：股災橘色巨核",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/enemies/boss/orange_market_crash_core.png",
+    "width": 160,
+    "height": 160,
+    "tags": [
+      "enemy",
+      "boss"
+    ]
+  },
+  {
+    "category": "子彈區",
+    "id": "bullet_player",
+    "name": "玩家投射物：資料骰子",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/projectiles/player/data_dice.png",
+    "width": 48,
+    "height": 48,
+    "tags": [
+      "projectile",
+      "player"
+    ]
+  },
+  {
+    "category": "子彈區",
+    "id": "bullet_elite",
+    "name": "菁英子彈：紫色封包",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/projectiles/enemy/elite_packet.png",
+    "width": 48,
+    "height": 48,
+    "tags": [
+      "projectile",
+      "elite"
+    ]
+  },
+  {
+    "category": "子彈區",
+    "id": "bullet_boss",
+    "name": "Boss 子彈：橘色崩盤彈",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/projectiles/enemy/boss_crash_bullet.png",
+    "width": 56,
+    "height": 56,
+    "tags": [
+      "projectile",
+      "boss"
+    ]
+  },
+  {
+    "category": "掉落物區",
+    "id": "drop_token",
+    "name": "Slot Token 代幣",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/drops/token.png",
+    "width": 48,
+    "height": 48,
+    "tags": [
+      "drop",
+      "token"
+    ]
+  },
+  {
+    "category": "掉落物區",
+    "id": "drop_chip",
+    "name": "廢棄晶片",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/drops/chip.png",
+    "width": 48,
+    "height": 48,
+    "tags": [
+      "drop",
+      "chip"
+    ]
+  },
+  {
+    "category": "掉落物區",
+    "id": "drop_xp",
+    "name": "經驗值",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/drops/xp.png",
+    "width": 48,
+    "height": 48,
+    "tags": [
+      "drop",
+      "xp"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_bomb",
+    "name": "炸彈",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/skills/bomb.png",
+    "width": 96,
+    "height": 96,
+    "tags": [
+      "skill",
+      "small"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_thunder",
+    "name": "落雷",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/skills/thunder.png",
+    "width": 96,
+    "height": 96,
+    "tags": [
+      "skill",
+      "small"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_frost",
+    "name": "冰霜",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/skills/frost_cone.png",
+    "width": 128,
+    "height": 96,
+    "tags": [
+      "skill",
+      "small"
+    ]
+  },
+  {
+    "category": "UI區",
+    "id": "ui_slot_panel",
+    "name": "Slot UI 面板",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/ui/slot_panel.png",
+    "width": 320,
+    "height": 180,
+    "tags": [
+      "ui",
+      "slot"
+    ]
+  },
+  {
+    "category": "UI區",
+    "id": "world_slot_machine",
+    "name": "地圖 Slot 機",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/ui/slot_machine.png",
+    "width": 96,
+    "height": 128,
+    "tags": [
+      "ui",
+      "slot",
+      "world"
+    ]
+  },
+  {
+    "category": "地圖區",
+    "id": "map_tile_grid",
+    "name": "地圖格線：資料荒原地磚",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/map/data_wasteland_tile.png",
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "map",
+      "tile"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_aura",
+    "name": "刺環",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/aura_ring/aura_ring_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/aura_ring/aura_ring_01.png",
+      "AIgame_rougelike/assets/art/skills/aura_ring/aura_ring_02.png",
+      "AIgame_rougelike/assets/art/skills/aura_ring/aura_ring_03.png"
+    ],
+    "width": 160,
+    "height": 160,
+    "tags": [
+      "skill",
+      "jackpot",
+      "sequence"
+    ]
+  },
+  {
+    "category": "特效區",
+    "id": "effect_dash",
+    "name": "玩家衝刺殘影",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/effects/dash/dash_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/effects/dash/dash_01.png",
+      "AIgame_rougelike/assets/art/effects/dash/dash_02.png",
+      "AIgame_rougelike/assets/art/effects/dash/dash_03.png"
+    ],
+    "width": 128,
+    "height": 64,
+    "tags": [
+      "effect",
+      "dash"
+    ]
+  },
+  {
+    "category": "特效區",
+    "id": "effect_electric_fence",
+    "name": "藍色電流柵欄",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/effects/electric_fence/fence_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/effects/electric_fence/fence_01.png",
+      "AIgame_rougelike/assets/art/effects/electric_fence/fence_02.png"
+    ],
+    "width": 192,
+    "height": 48,
+    "tags": [
+      "effect",
+      "fence"
+    ]
+  }
+]

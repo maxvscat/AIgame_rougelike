@@ -9,6 +9,9 @@ var kind := "xp"
 var amount := 1
 var player: Node2D
 var is_attracted := false
+var token_texture: Texture2D
+var chip_texture: Texture2D
+var xp_texture: Texture2D
 
 
 func setup(drop_kind: String, drop_amount: int, target_player: Node2D) -> void:
@@ -20,6 +23,9 @@ func setup(drop_kind: String, drop_amount: int, target_player: Node2D) -> void:
 
 func _ready() -> void:
 	add_to_group("drops")
+	token_texture = load("res://AIgame_rougelike/assets/art/drops/token.png")
+	chip_texture = load("res://AIgame_rougelike/assets/art/drops/chip.png")
+	xp_texture = load("res://AIgame_rougelike/assets/art/drops/xp.png")
 
 
 func _process(delta: float) -> void:
@@ -44,11 +50,20 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	if kind == "token":
-		draw_circle(Vector2.ZERO, 8.0, Color(1.0, 0.22, 0.9))
-		draw_circle(Vector2.ZERO, 4.0, Color(1.0, 0.78, 1.0))
+		if token_texture != null:
+			draw_texture_rect(token_texture, Rect2(Vector2(-13.0, -13.0), Vector2(26.0, 26.0)), false)
+		else:
+			draw_circle(Vector2.ZERO, 8.0, Color(1.0, 0.22, 0.9))
+			draw_circle(Vector2.ZERO, 4.0, Color(1.0, 0.78, 1.0))
 	elif kind == "chip":
-		draw_rect(Rect2(Vector2(-7.0, -6.0), Vector2(14.0, 12.0)), Color(0.2, 0.95, 1.0))
-		draw_rect(Rect2(Vector2(-3.0, -2.0), Vector2(6.0, 4.0)), Color(0.02, 0.12, 0.18))
+		if chip_texture != null:
+			draw_texture_rect(chip_texture, Rect2(Vector2(-13.0, -13.0), Vector2(26.0, 26.0)), false)
+		else:
+			draw_rect(Rect2(Vector2(-7.0, -6.0), Vector2(14.0, 12.0)), Color(0.2, 0.95, 1.0))
+			draw_rect(Rect2(Vector2(-3.0, -2.0), Vector2(6.0, 4.0)), Color(0.02, 0.12, 0.18))
 	else:
-		draw_circle(Vector2.ZERO, 7.0, Color(0.36, 1.0, 0.78))
-		draw_circle(Vector2.ZERO, 3.0, Color(0.82, 1.0, 0.95))
+		if xp_texture != null:
+			draw_texture_rect(xp_texture, Rect2(Vector2(-13.0, -13.0), Vector2(26.0, 26.0)), false)
+		else:
+			draw_circle(Vector2.ZERO, 7.0, Color(0.36, 1.0, 0.78))
+			draw_circle(Vector2.ZERO, 3.0, Color(0.82, 1.0, 0.95))

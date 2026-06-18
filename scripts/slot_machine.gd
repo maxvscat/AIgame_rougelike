@@ -4,6 +4,7 @@ extends Area2D
 
 var player: Node2D
 var can_interact := false
+var machine_texture: Texture2D
 
 
 func setup(target_player: Node2D) -> void:
@@ -12,6 +13,7 @@ func setup(target_player: Node2D) -> void:
 
 func _ready() -> void:
 	add_to_group("slot_machines")
+	machine_texture = load("res://AIgame_rougelike/assets/art/ui/slot_machine.png")
 
 
 func _process(_delta: float) -> void:
@@ -32,11 +34,14 @@ func _draw() -> void:
 		body_color = Color(0.34, 0.28, 0.48)
 		screen_color = Color(1.0, 0.86, 0.2)
 
-	draw_rect(Rect2(Vector2(-22.0, -28.0), Vector2(44.0, 56.0)), body_color)
-	draw_rect(Rect2(Vector2(-15.0, -20.0), Vector2(30.0, 17.0)), screen_color)
-	draw_circle(Vector2(0.0, 12.0), 7.0, Color(0.95, 0.18, 0.18))
-	draw_line(Vector2(24.0, -16.0), Vector2(36.0, -30.0), Color(0.75, 0.75, 0.82), 4.0)
-	draw_circle(Vector2(38.0, -32.0), 5.0, Color(0.95, 0.18, 0.18))
+	if machine_texture != null:
+		draw_texture_rect(machine_texture, Rect2(Vector2(-28.0, -38.0), Vector2(56.0, 76.0)), false, Color(1.12, 1.08, 1.0) if can_interact else Color.WHITE)
+	else:
+		draw_rect(Rect2(Vector2(-22.0, -28.0), Vector2(44.0, 56.0)), body_color)
+		draw_rect(Rect2(Vector2(-15.0, -20.0), Vector2(30.0, 17.0)), screen_color)
+		draw_circle(Vector2(0.0, 12.0), 7.0, Color(0.95, 0.18, 0.18))
+		draw_line(Vector2(24.0, -16.0), Vector2(36.0, -30.0), Color(0.75, 0.75, 0.82), 4.0)
+		draw_circle(Vector2(38.0, -32.0), 5.0, Color(0.95, 0.18, 0.18))
 
 	if can_interact:
 		draw_circle(Vector2.ZERO, interact_radius, Color(1.0, 0.86, 0.2, 0.08))

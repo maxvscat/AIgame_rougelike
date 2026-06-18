@@ -10,11 +10,16 @@ var player: Node2D
 var follow_offset := Vector2.ZERO
 var damage_multiplier := 0.5
 var _attack_timer := 0.0
+var _cat_texture: Texture2D
 
 
 func setup(target_player: Node2D, offset: Vector2) -> void:
 	player = target_player
 	follow_offset = offset
+
+
+func _ready() -> void:
+	_cat_texture = load("res://AIgame_rougelike/assets/art/characters/pets/lucky_cat.png")
 
 
 func _process(delta: float) -> void:
@@ -107,7 +112,10 @@ func _attack_nearest_enemy() -> void:
 
 
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, 11.0, Color(1.0, 0.72, 0.18))
-	draw_circle(Vector2(-4.0, -4.0), 2.0, Color(0.18, 0.09, 0.03))
-	draw_circle(Vector2(4.0, -4.0), 2.0, Color(0.18, 0.09, 0.03))
-	draw_line(Vector2(-4.0, 3.0), Vector2(4.0, 3.0), Color(0.18, 0.09, 0.03), 2.0)
+	if _cat_texture != null:
+		draw_texture_rect(_cat_texture, Rect2(Vector2(-18.0, -18.0), Vector2(36.0, 36.0)), false)
+	else:
+		draw_circle(Vector2.ZERO, 11.0, Color(1.0, 0.72, 0.18))
+		draw_circle(Vector2(-4.0, -4.0), 2.0, Color(0.18, 0.09, 0.03))
+		draw_circle(Vector2(4.0, -4.0), 2.0, Color(0.18, 0.09, 0.03))
+		draw_line(Vector2(-4.0, 3.0), Vector2(4.0, 3.0), Color(0.18, 0.09, 0.03), 2.0)
