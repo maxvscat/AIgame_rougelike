@@ -1,0 +1,25 @@
+[gd_resource type="Theme" load_steps=2 format=3]
+
+[ext_resource type="FontFile" uid="uid://ea286vqb8okb" path="res://AIgame_rougelike/assets/fonts/NotoSansCJKtc-Regular.otf" id="1_noto_sans_tc"]
+
+[resource]
+default_font = ExtResource("1_noto_sans_tc")
+default_font_size = 18
+Button/fonts/font = ExtResource("1_noto_sans_tc")
+CheckBox/fonts/font = ExtResource("1_noto_sans_tc")
+CheckButton/fonts/font = ExtResource("1_noto_sans_tc")
+ItemList/fonts/font = ExtResource("1_noto_sans_tc")
+Label/fonts/font = ExtResource("1_noto_sans_tc")
+LineEdit/fonts/font = ExtResource("1_noto_sans_tc")
+LinkButton/fonts/font = ExtResource("1_noto_sans_tc")
+MenuBar/fonts/font = ExtResource("1_noto_sans_tc")
+MenuButton/fonts/font = ExtResource("1_noto_sans_tc")
+OptionButton/fonts/font = ExtResource("1_noto_sans_tc")
+PopupMenu/fonts/font = ExtResource("1_noto_sans_tc")
+RichTextLabel/fonts/bold_font = ExtResource("1_noto_sans_tc")
+RichTextLabel/fonts/bold_italics_font = ExtResource("1_noto_sans_tc")
+RichTextLabel/fonts/italics_font = ExtResource("1_noto_sans_tc")
+RichTextLabel/fonts/mono_font = ExtResource("1_noto_sans_tc")
+RichTextLabel/fonts/normal_font = ExtResource("1_noto_sans_tc")
+TextEdit/fonts/font = ExtResource("1_noto_sans_tc")
+Tree/fonts/font = ExtResource("1_noto_sans_tc")

@@ -17,10 +17,9 @@ var health := 100
 var level := 1
 var experience := 0
 var experience_to_next := 25
-var money := 0
+var slot_tokens := 0
 var chip_pickups := 0
-var pickup_range_multiplier := 1.10
-var money_drop_multiplier := 1.0
+var pickup_range_multiplier := 1.70
 var chip_drop_multiplier := 1.0
 var crit_chance := 0.0
 var regen_per_second := 0.0
@@ -33,8 +32,16 @@ var jackpot_skills := {
 	"multishot": 0,
 	"dice_split": 0,
 	"slot_777": 0,
-	"money_attack": 0,
+	"energy_attack": 0,
 	"lucky_cat": 0
+}
+
+var small_skills := {
+	"bomb": 0,
+	"thunder": 0,
+	"fire": 0,
+	"ice": 0,
+	"missile": 0
 }
 
 var upgrade_skills := {
@@ -43,7 +50,6 @@ var upgrade_skills := {
 	"cost_rate": 0,
 	"fragment_amount": 0,
 	"reroll_rate": 0,
-	"coin_value": 0,
 	"line_rate": 0,
 	"damage": 0,
 	"attack_speed": 0,
@@ -94,8 +100,12 @@ func _auto_attack() -> void:
 
 	_attack_count += 1
 	var hit_targets: Array[Node2D] = []
-	for target in targets:
-		_damage_enemy(target, _roll_attack_damage(), global_position)
+	for index in range(targets.size()):
+		var target: Node2D = targets[index]
+		var damage: int = _roll_attack_damage()
+		if index > 0:
+			damage = max(1, int(round(float(damage) * 0.8)))
+		_damage_enemy(target, damage, global_position)
 		hit_targets.append(target)
 
 	var primary_target: Node2D = targets[0]
@@ -158,7 +168,8 @@ func _bounce_from_target(start_target: Node2D, max_bounces: int, hit_targets: Ar
 		var next_target := _find_nearest_enemy(current_target.global_position, 170.0, hit_targets)
 		if next_target == null:
 			return
-		_damage_enemy(next_target, _roll_attack_damage(), current_target.global_position)
+		var bounce_damage: int = max(1, int(round(float(_roll_attack_damage()) * 0.8)))
+		_damage_enemy(next_target, bounce_damage, current_target.global_position)
 		hit_targets.append(next_target)
 		current_target = next_target
 
@@ -184,7 +195,7 @@ func _split_from_target(primary_target: Node2D, hit_targets: Array[Node2D], spli
 func _explode_at(center: Vector2, skill_level: int) -> void:
 	var explosion_radius := 128.0
 	var damage_multiplier := 1.0 + 0.5 * float(skill_level - 1)
-	var damage: int = max(1, int(round(float(attack_damage) * damage_multiplier)))
+	var damage: int = max(1, int(round(float(attack_damage) * damage_multiplier * 0.8)))
 	area_effect.emit(center, explosion_radius, Color(1.0, 0.48, 0.08, 0.35))
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(enemy) or not enemy.has_method("take_damage"):
@@ -232,7 +243,8 @@ func add_experience(amount: int) -> void:
 	while experience >= experience_to_next:
 		experience -= experience_to_next
 		level += 1
-		experience_to_next = int(round(experience_to_next * 1.28)) + 8
+		_apply_level_stat_growth()
+		experience_to_next = _calculate_next_experience_requirement()
 		level_count += 1
 	stats_changed.emit()
 	for _index in range(level_count):
@@ -240,8 +252,26 @@ func add_experience(amount: int) -> void:
 		level_up_available.emit()
 
 
-func add_money(amount: int) -> void:
-	money += amount
+func _calculate_next_experience_requirement() -> int:
+	var multiplier := 1.18
+	if level > 10:
+		multiplier += min(0.82, pow(float(level - 10), 1.25) * 0.018)
+	var flat_bonus := 8 + int(round(float(level) * 1.5))
+	return max(experience_to_next + 1, int(round(float(experience_to_next) * multiplier)) + flat_bonus)
+
+
+func _apply_level_stat_growth() -> void:
+	attack_damage = max(attack_damage + 1, int(round(float(attack_damage) * 1.05)))
+	attack_cooldown = max(0.12, attack_cooldown / 1.05)
+	var old_max := max_health
+	max_health = max(max_health + 1, int(round(float(max_health) * 1.10)))
+	health = min(max_health, health + max_health - old_max)
+	pickup_range_multiplier *= 1.05
+	crit_chance += 0.05
+
+
+func add_token(amount: int) -> void:
+	slot_tokens += amount
 	stats_changed.emit()
 
 
@@ -250,10 +280,10 @@ func add_chip(amount: int) -> void:
 	stats_changed.emit()
 
 
-func spend_money(amount: int) -> bool:
-	if money < amount:
+func spend_token(amount: int) -> bool:
+	if slot_tokens < amount:
 		return false
-	money -= amount
+	slot_tokens -= amount
 	stats_changed.emit()
 	return true
 
@@ -264,12 +294,12 @@ func heal(amount: int) -> void:
 
 
 func grant_jackpot_skill(skill_id: String) -> bool:
+	if skill_id == "money_attack":
+		skill_id = "energy_attack"
 	if not jackpot_skills.has(skill_id):
 		return false
 	var current_level := int(jackpot_skills[skill_id])
 	if current_level >= 5:
-		add_money(100)
-		heal(50)
 		return false
 	jackpot_skills[skill_id] = current_level + 1
 	queue_redraw()
@@ -277,8 +307,25 @@ func grant_jackpot_skill(skill_id: String) -> bool:
 	return true
 
 
+func grant_small_skill(skill_id: String) -> bool:
+	if not small_skills.has(skill_id):
+		return false
+	var current_level := int(small_skills[skill_id])
+	if current_level >= 5:
+		return false
+	small_skills[skill_id] = current_level + 1
+	stats_changed.emit()
+	return true
+
+
 func get_skill_level(skill_id: String) -> int:
+	if skill_id == "money_attack":
+		skill_id = "energy_attack"
 	return int(jackpot_skills.get(skill_id, 0))
+
+
+func get_small_skill_level(skill_id: String) -> int:
+	return int(small_skills.get(skill_id, 0))
 
 
 func get_upgrade_skill_level(skill_id: String) -> int:

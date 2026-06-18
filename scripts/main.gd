@@ -1,18 +1,52 @@
 extends Node2D
 
-const PlayerScene := preload("res://scenes/player.tscn")
-const EnemyScene := preload("res://scenes/enemy.tscn")
-const DropScene := preload("res://scenes/drop.tscn")
-const CatPetScene := preload("res://scenes/cat_pet.tscn")
+const PlayerScene := preload("res://AIgame_rougelike/scenes/player.tscn")
+const EnemyScene := preload("res://AIgame_rougelike/scenes/enemy.tscn")
+const DropScene := preload("res://AIgame_rougelike/scenes/drop.tscn")
+const CatPetScene := preload("res://AIgame_rougelike/scenes/cat_pet.tscn")
+const BossBulletScript := preload("res://AIgame_rougelike/scripts/boss_bullet.gd")
 
 const GAME_DURATION_SECONDS := 600.0
 const SAVE_PATH := "user://save_slots.json"
 const SAVE_SLOT_COUNT := 5
-const BASE_SLOT_COST := 100
-const SLOT_COST_INCREASE_PER_MINUTE := 20
-const SMALL_FRAGMENT_MAX := 3
-const JACKPOT_FRAGMENT_MAX := 10
+const SLOT_BASE_TOKEN_COST := 10
+const SLOT_COST_PER_MINUTE := 10
+const NORMAL_TOKEN_DROP_CHANCE := 0.36
+const ELITE_TOKEN_DROP_CHANCE := 0.7
+const HEADHUNTER_TOKEN_DROP_AMOUNT := 5
+const BOSS_TOKEN_DROP_AMOUNT := 20
+const BOSS_CHIP_DROP_AMOUNT := 20
+const HEADHUNTER_CHIP_DROP_AMOUNT := 5
+const BASE_TWO_LINE_CHANCE := 0.25
+const BASE_THREE_LINE_CHANCE := 0.06
+const SLOT_PROBABILITY_MAX_MULTIPLIER := 1.7
 const TILE_SIZE := 64.0
+const PLAYER_BODY_RADIUS := 16.0
+const NORMAL_ENEMY_SPEED_MULTIPLIER := 0.5
+const ELITE_ENEMY_SPEED_MULTIPLIER := 1.08
+const EDGE_BOSS_SPAWN_TILES := 2.0
+const BOSS_BODY_RADIUS := PLAYER_BODY_RADIUS * 2.0
+const BOSS_CHARGE_PATH_LENGTH_RATE := 0.7
+const BOSS_CHARGE_PATH_WIDTH := BOSS_BODY_RADIUS * 6.0
+const BOSS_SCAN_WARNING_WIDTH := 24.5
+const BOSS_SCAN_DAMAGE_WIDTH := 119.0
+const ELECTRIC_FENCE_START_MARGIN_TILES := 5.0
+const ELECTRIC_FENCE_SHRINK_INTERVAL := 6.0
+const ELECTRIC_FENCE_DAMAGE_INTERVAL := 0.5
+const ELECTRIC_FENCE_SHRINK_AMOUNT := TILE_SIZE
+const ELECTRIC_FENCE_KNOCKBACK := TILE_SIZE * 0.5
+const DISABLED_LEVEL_UP_SKILLS := ["crit", "damage", "attack_speed", "experience", "move_speed"]
+const SLOT_BASE_SYMBOLS := ["J", "Q", "K", "A"]
+const BOSS_SPAWN_TIMES := [300.0, 600.0]
+const SLOT_SMALL_REWARD_IDS := ["bomb", "thunder", "fire", "ice", "missile"]
+const SLOT_JACKPOT_REWARD_IDS := ["lucky_cat", "bounce", "multishot", "slot_777", "energy_attack", "aura_ring"]
+const SMALL_SKILL_INTERVALS := {
+	"bomb": 3.0,
+	"thunder": 5.0,
+	"fire": 10.0,
+	"ice": 5.0,
+	"missile": 5.0
+}
 
 var player: Node2D
 var spawn_timer: Timer
@@ -26,7 +60,10 @@ var save_slots: Array = []
 var total_chips := 0
 var kill_count := 0
 var boss_damage := 0
-var next_boss_time := 60.0
+var boss_spawn_index := 0
+var next_headhunter_time := 180.0
+var last_difficulty_minute := 0
+var boss_spawn_paused := false
 
 var health_label: Label
 var level_label: Label
@@ -48,6 +85,7 @@ var lobby_equipped_label: Label
 var settings_overlay: Control
 var research_overlay: Control
 var level_up_overlay: Control
+var slot_reward_overlay: Control
 var pause_overlay: Control
 var confirm_overlay: Control
 var confirm_label: Label
@@ -61,8 +99,6 @@ var slot_result_label: Label
 var slot_reel_labels: Array[Label] = []
 var slot_spin_button: Button
 var slot_auto_button: Button
-var slot_fragment_label: Label
-var slot_skill_label: Label
 var slot_popup_label: Label
 var hud_equipped_panel: PanelContainer
 var hud_equipped_label: Label
@@ -71,29 +107,30 @@ var auto_spin_enabled := false
 var slot_popup_tween: Tween
 var pending_level_choices := 0
 var is_level_up_menu_open := false
+var is_slot_reward_menu_open := false
+var current_slot_reward_kind := ""
 
-var money_attack_timer := 60.0
+var energy_attack_timer := 60.0
 var aura_timer := 0.25
+var small_skill_timers := {}
 var cat_pets: Array[Node2D] = []
 var burning_enemies := {}
 var frozen_enemies := {}
+var electric_fence_active := false
+var electric_fence_center := Vector2.ZERO
+var electric_fence_half_extents := Vector2.ZERO
+var electric_fence_shrink_timer := ELECTRIC_FENCE_SHRINK_INTERVAL
+var electric_fence_damage_timer := ELECTRIC_FENCE_DAMAGE_INTERVAL
+var electric_fence_line: Line2D
 
 var slot_symbols := {
-	"bomb": {"name": "炸彈", "weight": 15, "type": "small"},
-	"thunder": {"name": "落雷", "weight": 15, "type": "small"},
-	"fire": {"name": "火焰風暴", "weight": 15, "type": "small"},
-	"ice": {"name": "冰凍", "weight": 15, "type": "small"},
-	"missile": {"name": "飛彈轟炸", "weight": 15, "type": "small"},
-	"aura_ring": {"name": "刺環", "weight": 10, "type": "jackpot"},
-	"bounce": {"name": "彈射", "weight": 10, "type": "jackpot"},
-	"multishot": {"name": "多重", "weight": 10, "type": "jackpot"},
-	"dice_split": {"name": "骰子分裂", "weight": 4, "type": "jackpot"},
-	"slot_777": {"name": "777爆炸", "weight": 4, "type": "jackpot"},
-	"money_attack": {"name": "金錢攻擊", "weight": 4, "type": "jackpot"},
-	"lucky_cat": {"name": "招財貓", "weight": 4, "type": "jackpot"}
+	"J": {"name": "J", "weight": 24},
+	"Q": {"name": "Q", "weight": 22},
+	"K": {"name": "K", "weight": 20},
+	"A": {"name": "A", "weight": 18},
+	"WILD": {"name": "WILD", "weight": 7},
+	"7": {"name": "7", "weight": 3}
 }
-
-var slot_fragments := {}
 
 var research_defs := {
 	"start_damage_50": {"name": "開局傷害", "base_cost": 50, "cost_step": 50, "effect": "start_damage_50", "max_level": 3},
@@ -108,10 +145,9 @@ var research_defs := {
 var upgrade_defs := {
 	"crit": {"name": "暴擊", "effect": "暴擊率", "per_level": 7, "unit": "%"},
 	"jackpot_rate": {"name": "大獎率", "effect": "大獎圖示出現率", "per_level": 7, "unit": "%"},
-	"cost_rate": {"name": "消耗率", "effect": "Spin 消耗金錢", "per_level": -5, "unit": "%"},
-	"fragment_amount": {"name": "碎片量", "effect": "兩連線碎片", "per_level": 1, "unit": "片"},
+	"cost_rate": {"name": "代幣掉落", "effect": "Slot代幣掉落率", "per_level": 7, "unit": "%"},
+	"fragment_amount": {"name": "WILD率", "effect": "WILD出現率", "per_level": 7, "unit": "%"},
 	"reroll_rate": {"name": "重抽率", "effect": "免費重抽機率", "per_level": 10, "unit": "%"},
-	"coin_value": {"name": "金幣倍率", "effect": "每枚金幣價值", "per_level": 3, "unit": "元"},
 	"line_rate": {"name": "連線率", "effect": "連線機率", "per_level": 7, "unit": "%"},
 	"damage": {"name": "傷害", "effect": "攻擊傷害", "per_level": 10, "unit": "%"},
 	"attack_speed": {"name": "攻速", "effect": "攻擊速度", "per_level": 10, "unit": "%"},
@@ -124,7 +160,9 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().paused = true
 	rng.randomize()
-	_init_slot_fragments()
+	_normalize_slot_symbol_names()
+	_normalize_upgrade_defs()
+	_reset_slot_run_state()
 	_load_save_slots()
 	_create_world()
 	_create_player()
@@ -135,20 +173,59 @@ func _ready() -> void:
 	_show_main_menu()
 
 
+func _normalize_slot_symbol_names() -> void:
+	var names := {
+		"J": "J",
+		"Q": "Q",
+		"K": "K",
+		"A": "A",
+		"WILD": "WILD",
+		"7": "7"
+	}
+	for symbol_id in names.keys():
+		if slot_symbols.has(symbol_id):
+			slot_symbols[symbol_id]["name"] = names[symbol_id]
+
+
+func _normalize_upgrade_defs() -> void:
+	var names := {
+		"crit": ["暴擊", "暴擊率"],
+		"jackpot_rate": ["大獎率", "大獎圖示出現率"],
+		"cost_rate": ["代幣掉落", "Slot代幣掉落率"],
+		"fragment_amount": ["WILD率", "WILD出現率"],
+		"reroll_rate": ["重抽率", "免費重抽機率"],
+		"line_rate": ["連線率", "連線機率"],
+		"damage": ["傷害", "攻擊傷害"],
+		"attack_speed": ["攻速", "攻擊速度"],
+		"experience": ["經驗", "經驗值"],
+		"move_speed": ["移速", "移動速度"]
+	}
+	for skill_id in names.keys():
+		if upgrade_defs.has(skill_id):
+			upgrade_defs[skill_id]["name"] = names[skill_id][0]
+			upgrade_defs[skill_id]["effect"] = names[skill_id][1]
+
+
 func _process(delta: float) -> void:
 	if get_tree().paused or not game_started:
 		return
 
 	elapsed_time += delta
 	_update_time_ui()
-	if elapsed_time >= GAME_DURATION_SECONDS:
-		_end_game(true)
-		return
-
+	_check_difficulty_minute()
 	_check_boss_spawn()
+	_check_headhunter_spawn()
+	_update_spawn_timer_by_boss_presence()
+	if elapsed_time >= GAME_DURATION_SECONDS and boss_spawn_index >= BOSS_SPAWN_TIMES.size():
+		if not _has_alive_boss():
+			_end_game(true)
+			return
+		_start_electric_fence()
+
 	_process_passive_abilities(delta)
 	_process_status_effects(delta)
-	if auto_spin_enabled and not is_slot_spinning and is_instance_valid(player) and player.money >= _get_slot_cost():
+	_process_electric_fence(delta)
+	if auto_spin_enabled and not is_slot_spinning and is_instance_valid(player) and player.slot_tokens >= _get_slot_cost():
 		_spin_slot()
 	queue_redraw()
 
@@ -196,7 +273,7 @@ func _create_world() -> void:
 	var background := ColorRect.new()
 	background.color = Color(0.055, 0.065, 0.075)
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	background.set_anchors_preset(Control.PRESET_FULL_RECT)
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var canvas := CanvasLayer.new()
 	canvas.layer = -10
 	add_child(canvas)
@@ -241,7 +318,7 @@ func _create_ui() -> void:
 
 	hud_layer = Control.new()
 	hud_layer.visible = false
-	hud_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hud_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	canvas.add_child(hud_layer)
 
 	var margin := MarginContainer.new()
@@ -302,6 +379,7 @@ func _create_ui() -> void:
 	_create_lobby_overlay(canvas)
 	_create_research_overlay(canvas)
 	_create_level_up_overlay(canvas)
+	_create_slot_reward_overlay(canvas)
 	_create_pause_overlay(canvas)
 	_create_settings_overlay(canvas)
 	_create_confirm_overlay(canvas)
@@ -311,7 +389,7 @@ func _create_ui() -> void:
 	game_over_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	game_over_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	game_over_label.add_theme_font_size_override("font_size", 56)
-	game_over_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	game_over_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	canvas.add_child(game_over_label)
 
 	settlement_label = Label.new()
@@ -319,7 +397,7 @@ func _create_ui() -> void:
 	settlement_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	settlement_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	settlement_label.add_theme_font_size_override("font_size", 28)
-	settlement_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	settlement_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	canvas.add_child(settlement_label)
 
 	slot_popup_label = Label.new()
@@ -331,7 +409,7 @@ func _create_ui() -> void:
 	slot_popup_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.95))
 	slot_popup_label.add_theme_constant_override("shadow_offset_x", 3)
 	slot_popup_label.add_theme_constant_override("shadow_offset_y", 3)
-	slot_popup_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	slot_popup_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	slot_popup_label.offset_top = 130.0
 	canvas.add_child(slot_popup_label)
 
@@ -339,21 +417,26 @@ func _create_ui() -> void:
 func _create_fixed_slot_ui(parent: Control) -> void:
 	slot_panel = PanelContainer.new()
 	slot_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	slot_panel.offset_left = -360.0
-	slot_panel.offset_top = 18.0
-	slot_panel.offset_right = -18.0
-	slot_panel.offset_bottom = 690.0
+	slot_panel.offset_left = -390.0
+	slot_panel.offset_top = 14.0
+	slot_panel.offset_right = -14.0
+	slot_panel.offset_bottom = 510.0
 	parent.add_child(slot_panel)
 
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(360.0, 485.0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	slot_panel.add_child(scroll)
+
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 9)
-	box.custom_minimum_size = Vector2(330.0, 650.0)
-	slot_panel.add_child(box)
+	box.add_theme_constant_override("separation", 8)
+	box.custom_minimum_size = Vector2(338.0, 0.0)
+	scroll.add_child(box)
 
 	var title := Label.new()
-	title.text = "戰鬥拉霸"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
+	title.text = "Slot 代幣機"
+	title.add_theme_font_size_override("font_size", 22)
 	box.add_child(title)
 
 	slot_money_label = Label.new()
@@ -361,7 +444,7 @@ func _create_fixed_slot_ui(parent: Control) -> void:
 	box.add_child(slot_money_label)
 
 	slot_cost_label = Label.new()
-	slot_cost_label.text = "每次轉動：100 money｜Space 或按鈕"
+	slot_cost_label.text = "每次轉動：10 Token｜每分鐘 +10｜Space 或按鈕"
 	slot_cost_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(slot_cost_label)
 
@@ -400,25 +483,17 @@ func _create_fixed_slot_ui(parent: Control) -> void:
 	slot_result_label.custom_minimum_size = Vector2(300.0, 56.0)
 	box.add_child(slot_result_label)
 
-	slot_fragment_label = Label.new()
-	slot_fragment_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(slot_fragment_label)
-
-	slot_skill_label = Label.new()
-	slot_skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(slot_skill_label)
-
 
 func _create_menu_panel(parent: Control, title_text: String, panel_size: Vector2) -> VBoxContainer:
 	parent.visible = false
 	parent.process_mode = Node.PROCESS_MODE_ALWAYS
-	parent.set_anchors_preset(Control.PRESET_FULL_RECT)
+	parent.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var dim := ColorRect.new()
 	dim.color = Color(0.0, 0.0, 0.0, 0.78)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	parent.add_child(dim)
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	parent.add_child(center)
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = panel_size
@@ -509,6 +584,12 @@ func _create_level_up_overlay(canvas: CanvasLayer) -> void:
 	_create_menu_panel(level_up_overlay, "LV UP！", Vector2(760.0, 440.0))
 
 
+func _create_slot_reward_overlay(canvas: CanvasLayer) -> void:
+	slot_reward_overlay = Control.new()
+	canvas.add_child(slot_reward_overlay)
+	_create_menu_panel(slot_reward_overlay, "Slot 獎勵", Vector2(760.0, 440.0))
+
+
 func _create_pause_overlay(canvas: CanvasLayer) -> void:
 	pause_overlay = Control.new()
 	canvas.add_child(pause_overlay)
@@ -580,9 +661,16 @@ func _create_confirm_overlay(canvas: CanvasLayer) -> void:
 	row.add_child(no_button)
 
 
-func _init_slot_fragments() -> void:
-	for symbol_id in slot_symbols.keys():
-		slot_fragments[symbol_id] = 0
+func _reset_slot_run_state() -> void:
+	_reset_small_skill_timers()
+	is_slot_reward_menu_open = false
+	current_slot_reward_kind = ""
+
+
+func _reset_small_skill_timers() -> void:
+	small_skill_timers.clear()
+	for skill_id in SMALL_SKILL_INTERVALS.keys():
+		small_skill_timers[skill_id] = float(SMALL_SKILL_INTERVALS[skill_id])
 
 
 func _default_save_slot() -> Dictionary:
@@ -641,6 +729,7 @@ func _show_main_menu() -> void:
 	settings_overlay.visible = false
 	research_overlay.visible = false
 	level_up_overlay.visible = false
+	slot_reward_overlay.visible = false
 	pause_overlay.visible = false
 	confirm_overlay.visible = false
 	hud_layer.visible = false
@@ -656,6 +745,7 @@ func _show_settings() -> void:
 	settings_overlay.visible = true
 	research_overlay.visible = false
 	level_up_overlay.visible = false
+	slot_reward_overlay.visible = false
 	pause_overlay.visible = false
 	confirm_overlay.visible = false
 
@@ -675,6 +765,7 @@ func _show_save_slots(for_new_game: bool) -> void:
 	settings_overlay.visible = false
 	research_overlay.visible = false
 	level_up_overlay.visible = false
+	slot_reward_overlay.visible = false
 	pause_overlay.visible = false
 	confirm_overlay.visible = false
 	slot_select_overlay.visible = true
@@ -751,6 +842,7 @@ func _show_lobby() -> void:
 	settings_overlay.visible = false
 	research_overlay.visible = false
 	level_up_overlay.visible = false
+	slot_reward_overlay.visible = false
 	pause_overlay.visible = false
 	confirm_overlay.visible = false
 	hud_layer.visible = false
@@ -773,6 +865,7 @@ func _begin_adventure_from_lobby() -> void:
 	settings_overlay.visible = false
 	research_overlay.visible = false
 	level_up_overlay.visible = false
+	slot_reward_overlay.visible = false
 	pause_overlay.visible = false
 	confirm_overlay.visible = false
 	hud_layer.visible = true
@@ -790,15 +883,25 @@ func _reset_run_state() -> void:
 	elapsed_time = 0.0
 	kill_count = 0
 	boss_damage = 0
-	next_boss_time = 60.0
-	money_attack_timer = 60.0
+	boss_spawn_index = 0
+	next_headhunter_time = 180.0
+	last_difficulty_minute = 0
+	boss_spawn_paused = false
+	energy_attack_timer = 60.0
 	aura_timer = 0.25
+	electric_fence_active = false
+	electric_fence_shrink_timer = ELECTRIC_FENCE_SHRINK_INTERVAL
+	electric_fence_damage_timer = ELECTRIC_FENCE_DAMAGE_INTERVAL
+	if is_instance_valid(electric_fence_line):
+		electric_fence_line.queue_free()
+	electric_fence_line = null
 	auto_spin_enabled = false
 	is_slot_spinning = false
+	is_slot_reward_menu_open = false
 	burning_enemies.clear()
 	frozen_enemies.clear()
 	cat_pets.clear()
-	_init_slot_fragments()
+	_reset_slot_run_state()
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if is_instance_valid(enemy):
 			enemy.queue_free()
@@ -838,6 +941,7 @@ func _is_no_menu_overlay_open() -> bool:
 		or (settings_overlay != null and settings_overlay.visible)
 		or (research_overlay != null and research_overlay.visible)
 		or (level_up_overlay != null and level_up_overlay.visible)
+		or (slot_reward_overlay != null and slot_reward_overlay.visible)
 		or (confirm_overlay != null and confirm_overlay.visible)
 		or (pause_overlay != null and pause_overlay.visible)
 	)
@@ -874,6 +978,7 @@ func _show_research_center() -> void:
 	settings_overlay.visible = false
 	confirm_overlay.visible = false
 	level_up_overlay.visible = false
+	slot_reward_overlay.visible = false
 	pause_overlay.visible = false
 	research_overlay.visible = true
 	var box := _get_menu_box(research_overlay)
@@ -923,12 +1028,16 @@ func _set_research_slot(index: int) -> void:
 
 func _queue_level_up_choices() -> void:
 	pending_level_choices += 1
+	if is_slot_spinning or is_slot_reward_menu_open or (slot_reward_overlay != null and slot_reward_overlay.visible):
+		return
 	if not is_level_up_menu_open:
 		_show_level_up_choices()
 
 
 func _show_level_up_choices() -> void:
 	if not game_started or not is_instance_valid(player):
+		return
+	if is_slot_spinning or is_slot_reward_menu_open or (slot_reward_overlay != null and slot_reward_overlay.visible):
 		return
 	var available := _get_available_upgrade_ids()
 	if available.is_empty():
@@ -941,7 +1050,7 @@ func _show_level_up_choices() -> void:
 	_clear_menu_dynamic_children(box)
 
 	var info := Label.new()
-	info.text = "選擇 1 個技能。技能可重複取得，最高 LV5。"
+	info.text = "選擇 1 個技能。技能可重複取得，最高 LV MAX。"
 	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(info)
@@ -960,6 +1069,8 @@ func _show_level_up_choices() -> void:
 func _get_available_upgrade_ids() -> Array[String]:
 	var available: Array[String] = []
 	for skill_id in upgrade_defs.keys():
+		if DISABLED_LEVEL_UP_SKILLS.has(str(skill_id)):
+			continue
 		if player.get_upgrade_skill_level(str(skill_id)) < 5:
 			available.append(str(skill_id))
 	return available
@@ -968,12 +1079,16 @@ func _get_available_upgrade_ids() -> Array[String]:
 func _format_upgrade_choice(skill_id: String) -> String:
 	var current_level: int = player.get_upgrade_skill_level(skill_id)
 	var next_level: int = current_level + 1
-	return "%s LV%d -> LV%d\n%s" % [
+	return "%s %s -> %s\n%s" % [
 		str(upgrade_defs[skill_id]["name"]),
-		current_level,
-		next_level,
+		_format_skill_level(current_level),
+		_format_skill_level(next_level),
 		_get_upgrade_skill_effect_text(skill_id, next_level)
 	]
+
+
+func _format_skill_level(level: int) -> String:
+	return "LV MAX" if level >= 5 else "LV%d" % level
 
 
 func _choose_upgrade_skill(skill_id: String) -> void:
@@ -994,19 +1109,31 @@ func _get_upgrade_skill_effect_text(skill_id: String, level: int = -1) -> String
 	var skill_level: int = player.get_upgrade_skill_level(skill_id) if level < 0 and is_instance_valid(player) else level
 	if skill_level < 0:
 		skill_level = 0
+	var effect_texts := {
+		"crit": "暴擊率 +%d%%" % int(skill_level * 7),
+		"jackpot_rate": "大獎圖示出現率 +%d%%" % int(skill_level * 7),
+		"cost_rate": "Slot代幣掉落率 +%d%%" % int(skill_level * 7),
+		"fragment_amount": "WILD 出現率 +%d%%" % int(skill_level * 7),
+		"reroll_rate": "免費重抽率 +%d%%" % int(skill_level * 10),
+		"line_rate": "連線率 +%d%%" % int(skill_level * 7),
+		"damage": "攻擊傷害 +%d%%" % int(skill_level * 10),
+		"attack_speed": "攻擊速度 +%d%%" % int(skill_level * 10),
+		"experience": "經驗值 +%d%%" % int(skill_level * 10),
+		"move_speed": "移動速度 +%d%%" % int(skill_level * 10)
+	}
+	if effect_texts.has(skill_id):
+		return effect_texts[skill_id]
 	match skill_id:
 		"crit":
 			return "暴擊率 +%d%%" % int(skill_level * 7)
 		"jackpot_rate":
 			return "大獎圖示出現率 +%d%%" % int(skill_level * 7)
 		"cost_rate":
-			return "Spin 消耗金錢 -%d%%" % int(skill_level * 5)
+			return "Slot代幣掉落率 +%d%%" % int(skill_level * 7)
 		"fragment_amount":
-			return "兩連線碎片 +%d片" % skill_level
+			return "WILD 出現率 +%d%%" % int(skill_level * 7)
 		"reroll_rate":
 			return "免費重抽率 +%d%%" % int(skill_level * 10)
-		"coin_value":
-			return "每枚金幣 +%d元" % int(skill_level * 3)
 		"line_rate":
 			return "連線率 +%d%%" % int(skill_level * 7)
 		"damage":
@@ -1101,6 +1228,9 @@ func _update_equipped_hud() -> void:
 	var upgrade_text := _get_upgrade_skills_text()
 	if not upgrade_text.is_empty():
 		text_blocks.append(upgrade_text)
+	var slot_skill_text := _get_run_slot_skills_text()
+	if not slot_skill_text.is_empty():
+		text_blocks.append(slot_skill_text)
 	hud_equipped_panel.visible = game_started and not text_blocks.is_empty()
 	hud_equipped_label.text = "\n\n".join(text_blocks)
 
@@ -1110,10 +1240,29 @@ func _get_upgrade_skills_text() -> String:
 		return ""
 	var lines := ["升級技能："]
 	for skill_id in upgrade_defs.keys():
+		if DISABLED_LEVEL_UP_SKILLS.has(str(skill_id)):
+			continue
 		var level: int = player.get_upgrade_skill_level(str(skill_id))
 		if level <= 0:
 			continue
-		lines.append("%s LV%d %s" % [str(upgrade_defs[skill_id]["name"]), level, _get_upgrade_skill_effect_text(str(skill_id))])
+		lines.append("%s %s %s" % [str(upgrade_defs[skill_id]["name"]), _format_skill_level(level), _get_upgrade_skill_effect_text(str(skill_id))])
+	if lines.size() == 1:
+		return ""
+	return "\n".join(lines)
+
+
+func _get_run_slot_skills_text() -> String:
+	if not is_instance_valid(player):
+		return ""
+	var lines := ["Slot技能："]
+	for skill_id in player.small_skills.keys():
+		var level: int = player.get_small_skill_level(str(skill_id))
+		if level > 0:
+			lines.append("%s %s" % [_skill_name(str(skill_id)), _format_skill_level(level)])
+	for skill_id in player.jackpot_skills.keys():
+		var level: int = player.get_skill_level(str(skill_id))
+		if level > 0:
+			lines.append("%s %s" % [_skill_name(str(skill_id)), _format_skill_level(level)])
 	if lines.size() == 1:
 		return ""
 	return "\n".join(lines)
@@ -1154,22 +1303,24 @@ func _toggle_research(research_id: String) -> void:
 
 
 func _spawn_enemy() -> void:
-	if not is_instance_valid(player):
+	if not is_instance_valid(player) or _has_alive_boss():
 		return
 	var enemy := EnemyScene.instantiate()
 	enemy.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(enemy)
 	enemy.target = player
 	_configure_enemy_kind(enemy, _roll_spawn_enemy_kind())
-	enemy.scale_stats(_get_enemy_growth_multiplier())
+	enemy.scale_combat_stats(_get_enemy_growth_multiplier())
 	enemy.global_position = _get_spawn_position()
 	enemy.died.connect(_on_enemy_died)
 	enemy.damaged.connect(_on_enemy_damaged)
+	if enemy.has_signal("special_requested"):
+		enemy.special_requested.connect(_on_enemy_special_requested)
 	spawn_timer.wait_time = max(0.28, 0.9 - elapsed_time / 180.0)
 
 
 func _get_enemy_growth_multiplier() -> float:
-	return 1.0 + float(int(floor(elapsed_time / 60.0))) * 0.3
+	return pow(1.2, float(int(floor(elapsed_time / 60.0))))
 
 
 func _roll_spawn_enemy_kind() -> String:
@@ -1184,21 +1335,32 @@ func _configure_enemy_kind(enemy: Node, enemy_kind: String) -> void:
 		"elite":
 			enemy.max_health *= 3
 			enemy.health = enemy.max_health
-			enemy.speed *= 1.08
+			enemy.speed *= ELITE_ENEMY_SPEED_MULTIPLIER
+			enemy.touch_damage = max(1, int(round(float(enemy.touch_damage) * 1.5)))
 			enemy.xp_value *= 2
-			enemy.money_value *= 2
+		"headhunter":
+			enemy.max_health *= 15
+			enemy.health = enemy.max_health
+			enemy.speed *= ELITE_ENEMY_SPEED_MULTIPLIER * 2.5
+			enemy.touch_damage *= 3
+			enemy.contact_distance *= 1.5
+			enemy.separation_distance *= 1.5
+			enemy.xp_value *= 5
 		"boss":
 			enemy.max_health *= 18
 			enemy.health = enemy.max_health
-			enemy.speed *= 0.68
+			enemy.speed = float(player.speed) * 0.8 if is_instance_valid(player) else enemy.speed * 0.68
 			enemy.touch_damage *= 3
+			enemy.contact_distance = BOSS_BODY_RADIUS * 2.0
+			enemy.separation_distance = BOSS_BODY_RADIUS * 1.85
 			enemy.xp_value *= 10
-			enemy.money_value *= 10
+		_:
+			enemy.speed *= NORMAL_ENEMY_SPEED_MULTIPLIER
 
 
 func _check_boss_spawn() -> void:
-	if elapsed_time >= next_boss_time:
-		next_boss_time += 60.0
+	while boss_spawn_index < BOSS_SPAWN_TIMES.size() and elapsed_time >= float(BOSS_SPAWN_TIMES[boss_spawn_index]):
+		boss_spawn_index += 1
 		_spawn_boss()
 
 
@@ -1210,16 +1372,47 @@ func _spawn_boss() -> void:
 	add_child(enemy)
 	enemy.target = player
 	_configure_enemy_kind(enemy, "boss")
-	enemy.scale_stats(_get_enemy_growth_multiplier())
-	enemy.global_position = _get_spawn_position()
+	enemy.scale_combat_stats(_get_enemy_growth_multiplier())
+	enemy.global_position = _get_spawn_position(EDGE_BOSS_SPAWN_TILES)
 	enemy.died.connect(_on_enemy_died)
 	enemy.damaged.connect(_on_enemy_damaged)
+	if enemy.has_signal("special_requested"):
+		enemy.special_requested.connect(_on_enemy_special_requested)
+	_show_top_notice("Boss 出現！擊敗 Boss 才能通關", Color(1.0, 0.18, 0.12))
+	_update_spawn_timer_by_boss_presence()
 
 
-func _get_spawn_position() -> Vector2:
+func _check_headhunter_spawn() -> void:
+	if elapsed_time < next_headhunter_time or _has_alive_boss():
+		return
+	while elapsed_time >= next_headhunter_time:
+		next_headhunter_time += 180.0
+	if _has_enemy_kind("headhunter"):
+		return
+	_spawn_headhunter()
+
+
+func _spawn_headhunter() -> void:
+	if not is_instance_valid(player):
+		return
+	var enemy := EnemyScene.instantiate()
+	enemy.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(enemy)
+	enemy.target = player
+	_configure_enemy_kind(enemy, "headhunter")
+	enemy.scale_combat_stats(_get_enemy_growth_multiplier())
+	enemy.global_position = _get_spawn_position(EDGE_BOSS_SPAWN_TILES)
+	enemy.died.connect(_on_enemy_died)
+	enemy.damaged.connect(_on_enemy_damaged)
+	if enemy.has_signal("special_requested"):
+		enemy.special_requested.connect(_on_enemy_special_requested)
+	_show_top_notice("⚠ 獵頭已鎖定你！", Color(0.2, 1.0, 0.35))
+
+
+func _get_spawn_position(edge_margin_tiles := 1.4) -> Vector2:
 	var viewport_size := get_viewport_rect().size
 	var half_size := viewport_size * 0.5
-	var margin := 90.0
+	var margin := edge_margin_tiles * TILE_SIZE
 	var side := rng.randi_range(0, 3)
 	var offset := Vector2.ZERO
 	match side:
@@ -1234,6 +1427,42 @@ func _get_spawn_position() -> Vector2:
 	return player.global_position + offset
 
 
+func _check_difficulty_minute() -> void:
+	var current_minute := int(floor(elapsed_time / 60.0))
+	if current_minute <= last_difficulty_minute:
+		return
+	last_difficulty_minute = current_minute
+	_show_top_notice("難度提升", Color(1.0, 0.25, 0.16))
+	_update_slot_ui()
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if is_instance_valid(enemy) and enemy.has_method("scale_combat_stats"):
+			enemy.scale_combat_stats(1.2)
+
+
+func _has_alive_boss() -> bool:
+	return _has_enemy_kind("boss")
+
+
+func _has_enemy_kind(enemy_kind: String) -> bool:
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if is_instance_valid(enemy) and str(enemy.enemy_kind) == enemy_kind:
+			return true
+	return false
+
+
+func _update_spawn_timer_by_boss_presence() -> void:
+	if spawn_timer == null:
+		return
+	var should_pause_spawns := _has_alive_boss()
+	if should_pause_spawns == boss_spawn_paused:
+		return
+	boss_spawn_paused = should_pause_spawns
+	if boss_spawn_paused:
+		spawn_timer.stop()
+	else:
+		spawn_timer.start()
+
+
 func _process_passive_abilities(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
@@ -1243,12 +1472,27 @@ func _process_passive_abilities(delta: float) -> void:
 		if aura_timer <= 0.0:
 			aura_timer = 0.25
 			_apply_aura_damage(aura_level)
-	var money_level: int = player.get_skill_level("money_attack")
-	if money_level > 0:
-		money_attack_timer -= delta
-		if money_attack_timer <= 0.0:
-			money_attack_timer = 60.0 * pow(0.85, money_level - 1)
-			_trigger_money_attack()
+	var energy_level: int = player.get_skill_level("energy_attack")
+	if energy_level > 0:
+		energy_attack_timer -= delta
+		if energy_attack_timer <= 0.0:
+			energy_attack_timer = 60.0 * pow(0.85, energy_level - 1)
+			_trigger_energy_attack()
+	_process_small_skill_passives(delta)
+
+
+func _process_small_skill_passives(delta: float) -> void:
+	for skill_id in SMALL_SKILL_INTERVALS.keys():
+		if not is_instance_valid(player) or not player.has_method("get_small_skill_level"):
+			return
+		var level: int = player.get_small_skill_level(str(skill_id))
+		if level <= 0:
+			continue
+		var timer := float(small_skill_timers.get(skill_id, SMALL_SKILL_INTERVALS[skill_id])) - delta
+		if timer <= 0.0:
+			timer = float(SMALL_SKILL_INTERVALS[skill_id])
+			_trigger_small_symbol(str(skill_id))
+		small_skill_timers[skill_id] = timer
 
 
 func _process_status_effects(delta: float) -> void:
@@ -1271,24 +1515,94 @@ func _process_status_effects(delta: float) -> void:
 	for enemy in to_clear:
 		burning_enemies.erase(enemy)
 
-	to_clear.clear()
-	for enemy in frozen_enemies.keys():
+
+func _start_electric_fence() -> void:
+	if electric_fence_active or not is_instance_valid(player):
+		return
+	electric_fence_active = true
+	electric_fence_center = player.global_position
+	var half_size := get_viewport_rect().size * 0.5
+	electric_fence_half_extents = half_size + Vector2.ONE * ELECTRIC_FENCE_START_MARGIN_TILES * TILE_SIZE
+	electric_fence_shrink_timer = ELECTRIC_FENCE_SHRINK_INTERVAL
+	electric_fence_damage_timer = ELECTRIC_FENCE_DAMAGE_INTERVAL
+	_show_top_notice("電流柵欄啟動，擊敗 Boss 才能通關", Color(0.35, 0.75, 1.0))
+	_update_electric_fence_visual()
+
+
+func _process_electric_fence(delta: float) -> void:
+	if not electric_fence_active:
+		return
+	electric_fence_shrink_timer -= delta
+	if electric_fence_shrink_timer <= 0.0:
+		electric_fence_shrink_timer += ELECTRIC_FENCE_SHRINK_INTERVAL
+		electric_fence_half_extents.x = max(TILE_SIZE * 2.0, electric_fence_half_extents.x - ELECTRIC_FENCE_SHRINK_AMOUNT)
+		electric_fence_half_extents.y = max(TILE_SIZE * 2.0, electric_fence_half_extents.y - ELECTRIC_FENCE_SHRINK_AMOUNT)
+		_update_electric_fence_visual()
+	electric_fence_damage_timer -= delta
+	if electric_fence_damage_timer > 0.0:
+		return
+	electric_fence_damage_timer += ELECTRIC_FENCE_DAMAGE_INTERVAL
+	_apply_electric_fence_damage()
+
+
+func _update_electric_fence_visual() -> void:
+	if is_instance_valid(electric_fence_line):
+		electric_fence_line.queue_free()
+	var left := electric_fence_center.x - electric_fence_half_extents.x
+	var right := electric_fence_center.x + electric_fence_half_extents.x
+	var top := electric_fence_center.y - electric_fence_half_extents.y
+	var bottom := electric_fence_center.y + electric_fence_half_extents.y
+	electric_fence_line = Line2D.new()
+	electric_fence_line.width = 10.0
+	electric_fence_line.default_color = Color(0.1, 0.55, 1.0, 0.85)
+	electric_fence_line.closed = true
+	electric_fence_line.points = PackedVector2Array([
+		Vector2(left, top),
+		Vector2(right, top),
+		Vector2(right, bottom),
+		Vector2(left, bottom)
+	])
+	add_child(electric_fence_line)
+
+
+func _apply_electric_fence_damage() -> void:
+	if is_instance_valid(player) and not _is_inside_electric_fence(player.global_position):
+		player.take_damage(max(1, int(round(float(player.max_health) * 0.2))))
+		_knock_node_into_fence(player)
+	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(enemy):
-			to_clear.append(enemy)
 			continue
-		var time_left := float(frozen_enemies[enemy]) - delta
-		if time_left <= 0.0:
-			enemy.set_physics_process(true)
-			to_clear.append(enemy)
-		else:
-			frozen_enemies[enemy] = time_left
-	for enemy in to_clear:
-		frozen_enemies.erase(enemy)
+		var kind := str(enemy.enemy_kind)
+		if kind == "boss" or kind == "headhunter":
+			continue
+		if _is_inside_electric_fence(enemy.global_position):
+			continue
+		var max_health_value: Variant = enemy.get("max_health")
+		var enemy_max_health: int = int(max_health_value) if max_health_value != null else 10
+		if enemy.has_method("take_damage"):
+			enemy.take_damage(max(1, int(round(float(enemy_max_health) * 0.2))))
+		_knock_node_into_fence(enemy)
+
+
+func _is_inside_electric_fence(position: Vector2) -> bool:
+	return (
+		position.x >= electric_fence_center.x - electric_fence_half_extents.x
+		and position.x <= electric_fence_center.x + electric_fence_half_extents.x
+		and position.y >= electric_fence_center.y - electric_fence_half_extents.y
+		and position.y <= electric_fence_center.y + electric_fence_half_extents.y
+	)
+
+
+func _knock_node_into_fence(node: Node2D) -> void:
+	var direction := (electric_fence_center - node.global_position).normalized()
+	if direction.length() <= 0.001:
+		direction = Vector2.RIGHT
+	node.global_position += direction * ELECTRIC_FENCE_KNOCKBACK
 
 
 func _apply_aura_damage(level: int) -> void:
 	var radius := 3.0 * TILE_SIZE
-	var damage := int(round(30.0 * (1.0 + 0.2 * float(level - 1)) * 0.25))
+	var damage := int(round(30.0 * (1.0 + 0.2 * float(level - 1)) * 0.25 * 0.8))
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(enemy) or not enemy.has_method("take_damage"):
 			continue
@@ -1297,8 +1611,8 @@ func _apply_aura_damage(level: int) -> void:
 			_show_damage_number(enemy.global_position, damage)
 
 
-func _trigger_money_attack() -> void:
-	var damage: int = max(1, int(round(float(player.attack_damage) * 0.8)))
+func _trigger_energy_attack() -> void:
+	var damage: int = max(1, int(round(float(player.attack_damage) * 0.64)))
 	for enemy in _get_visible_enemies():
 		enemy.take_damage(damage)
 		_show_damage_number(enemy.global_position, damage)
@@ -1319,13 +1633,24 @@ func _get_visible_enemies() -> Array[Node2D]:
 	return visible_enemies
 
 
+func _get_random_visible_position(edge_margin := 0.0) -> Vector2:
+	if not is_instance_valid(player):
+		return Vector2.ZERO
+	var half_size := get_viewport_rect().size * 0.5
+	return player.global_position + Vector2(
+		rng.randf_range(-half_size.x + edge_margin, half_size.x - edge_margin),
+		rng.randf_range(-half_size.y + edge_margin, half_size.y - edge_margin)
+	)
+
+
 func _spin_slot() -> void:
 	if is_slot_spinning or not game_started or get_tree().paused:
 		return
 	var slot_cost := _get_slot_cost()
-	if not player.spend_money(slot_cost):
-		slot_result_label.text = "money 不足，無法轉動。"
+	if not player.spend_token(slot_cost):
+		slot_result_label.text = "Slot 代幣不足，無法轉動。"
 		_update_slot_ui()
+		slot_result_label.text = "Slot 代幣不足，無法轉動。"
 		return
 	is_slot_spinning = true
 	slot_spin_button.disabled = true
@@ -1334,32 +1659,34 @@ func _spin_slot() -> void:
 		for reel in slot_reel_labels:
 			reel.text = _symbol_name(_roll_weighted_symbol())
 		await get_tree().create_timer(0.08).timeout
-	var result := [_roll_weighted_symbol(), _roll_weighted_symbol(), _roll_weighted_symbol()]
-	_apply_line_rate_to_result(result)
+	var result := _roll_slot_result()
 	for index in range(3):
 		slot_reel_labels[index].text = _symbol_name(result[index])
-	_resolve_slot_result(result)
-	if _should_free_reroll():
+	var opened_reward_menu := _resolve_slot_result(result)
+	if not opened_reward_menu and not get_tree().paused and _should_free_reroll():
 		slot_result_label.text += "\n重抽率發動，免費重抽！"
 		_show_slot_popup("重抽率發動：免費重抽")
-		result = [_roll_weighted_symbol(), _roll_weighted_symbol(), _roll_weighted_symbol()]
-		_apply_line_rate_to_result(result)
+		result = _roll_slot_result()
 		for index in range(3):
 			slot_reel_labels[index].text = _symbol_name(result[index])
 		_resolve_slot_result(result)
 	is_slot_spinning = false
-	slot_spin_button.disabled = player.money < _get_slot_cost()
+	slot_spin_button.disabled = player.slot_tokens < _get_slot_cost()
 	_update_slot_ui()
+	if pending_level_choices > 0 and not get_tree().paused and not _get_available_upgrade_ids().is_empty():
+		_show_level_up_choices()
 
 
 func _get_slot_cost() -> int:
-	var raw_cost := BASE_SLOT_COST + int(floor(elapsed_time / 60.0)) * SLOT_COST_INCREASE_PER_MINUTE
-	var discount := 1.0 - 0.05 * float(player.get_upgrade_skill_level("cost_rate"))
-	return max(1, int(round(float(raw_cost) * discount)))
+	return SLOT_BASE_TOKEN_COST + int(floor(elapsed_time / 60.0)) * SLOT_COST_PER_MINUTE
 
 
 func _set_auto_spin(enabled: bool) -> void:
 	auto_spin_enabled = enabled
+	if slot_auto_button != null:
+		slot_auto_button.text = "Auto：開" if enabled else "Auto：關"
+
+
 	if slot_auto_button != null:
 		slot_auto_button.text = "Auto：開" if enabled else "Auto：關"
 
@@ -1374,30 +1701,87 @@ func _roll_weighted_symbol() -> String:
 		running += _slot_symbol_weight(str(symbol_id))
 		if roll <= running:
 			return symbol_id
-	return "bomb"
+	return "J"
+
+
+func _roll_slot_result() -> Array:
+	var result := [_roll_weighted_symbol(), _roll_weighted_symbol(), _roll_weighted_symbol()]
+	_limit_wild_count(result)
+	_apply_base_line_bonus(result)
+	_limit_wild_count(result)
+	_apply_line_rate_to_result(result)
+	_limit_wild_count(result)
+	return result
+
+
+func _limit_wild_count(result: Array) -> void:
+	var found_wild := false
+	for index in range(result.size()):
+		if str(result[index]) != "WILD":
+			continue
+		if not found_wild:
+			found_wild = true
+		else:
+			result[index] = _roll_non_wild_symbol()
+
+
+func _roll_non_wild_symbol() -> String:
+	var choices := ["J", "Q", "K", "A", "7"]
+	return str(choices[rng.randi_range(0, choices.size() - 1)])
 
 
 func _slot_symbol_weight(symbol_id: String) -> float:
 	var weight := float(slot_symbols[symbol_id]["weight"])
-	if str(slot_symbols[symbol_id]["type"]) == "jackpot":
+	if symbol_id == "7":
+		weight *= 1.05
 		weight *= 1.0 + 0.07 * float(player.get_upgrade_skill_level("jackpot_rate"))
+	elif symbol_id == "WILD":
+		weight *= 1.0 + 0.07 * float(player.get_upgrade_skill_level("fragment_amount"))
 	return weight
+
+
+func _get_slot_probability_multiplier() -> float:
+	var minute_step: int = clamp(int(floor(elapsed_time / 60.0)), 0, 9)
+	return 1.0 + (SLOT_PROBABILITY_MAX_MULTIPLIER - 1.0) * float(minute_step) / 9.0
+
+
+func _apply_base_line_bonus(result: Array) -> void:
+	if _is_slot_jackpot(result) or _is_slot_small_win(result):
+		return
+	var roll := rng.randf()
+	var probability_multiplier: float = _get_slot_probability_multiplier()
+	var three_line_chance: float = min(0.95, BASE_THREE_LINE_CHANCE * probability_multiplier)
+	var two_line_chance: float = min(0.95 - three_line_chance, BASE_TWO_LINE_CHANCE * probability_multiplier)
+	if roll < three_line_chance:
+		var symbol_id: String = _roll_weighted_symbol()
+		if symbol_id == "WILD":
+			var wild_index := rng.randi_range(0, result.size() - 1)
+			for index in range(result.size()):
+				result[index] = "WILD" if index == wild_index else "7"
+		else:
+			for index in range(result.size()):
+				result[index] = symbol_id
+	elif roll < three_line_chance + two_line_chance:
+		var symbol_id: String = SLOT_BASE_SYMBOLS[rng.randi_range(0, SLOT_BASE_SYMBOLS.size() - 1)]
+		var wild_index := rng.randi_range(0, result.size() - 1)
+		for index in range(result.size()):
+			result[index] = "WILD" if index == wild_index else symbol_id
 
 
 func _apply_line_rate_to_result(result: Array) -> void:
 	var line_level: int = player.get_upgrade_skill_level("line_rate")
-	if line_level <= 0 or rng.randf() >= 0.07 * float(line_level):
+	if line_level <= 0 or _is_slot_jackpot(result) or _is_slot_small_win(result) or rng.randf() >= 0.07 * float(line_level):
 		return
-	var counts := {}
-	for symbol_id in result:
-		counts[symbol_id] = int(counts.get(symbol_id, 0)) + 1
-	for symbol_id in counts.keys():
-		if int(counts[symbol_id]) == 2:
-			for index in range(result.size()):
-				if result[index] != symbol_id:
-					result[index] = symbol_id
-					return
-	result[1] = result[0]
+	var symbol_id := ""
+	for candidate in SLOT_BASE_SYMBOLS:
+		if result.count(candidate) >= 2:
+			symbol_id = candidate
+			break
+	if symbol_id.is_empty():
+		symbol_id = SLOT_BASE_SYMBOLS[rng.randi_range(0, SLOT_BASE_SYMBOLS.size() - 1)]
+	var wild_index := rng.randi_range(0, result.size() - 1)
+	for index in range(result.size()):
+		result[index] = "WILD" if index == wild_index else symbol_id
 
 
 func _should_free_reroll() -> bool:
@@ -1405,56 +1789,277 @@ func _should_free_reroll() -> bool:
 	return reroll_level > 0 and rng.randf() < 0.10 * float(reroll_level)
 
 
-func _resolve_slot_result(result: Array) -> void:
-	if result[0] == result[1] and result[1] == result[2]:
-		_trigger_symbol(result[0], true)
-		return
-	var counts := {}
-	for symbol_id in result:
-		counts[symbol_id] = int(counts.get(symbol_id, 0)) + 1
-	for symbol_id in counts.keys():
-		if int(counts[symbol_id]) == 2:
-			var fragment_gain: int = 2 + player.get_upgrade_skill_level("fragment_amount")
-			_add_fragments(symbol_id, fragment_gain)
-			slot_result_label.text = "差一格！%s碎片 +%d" % [_symbol_name(symbol_id), fragment_gain]
-			return
+func _resolve_slot_result(result: Array) -> bool:
+	if _is_slot_jackpot(result):
+		slot_result_label.text = "777 大獎！選擇一個永久技能"
+		_show_slot_reward_choices("jackpot")
+		return true
+	var small_symbol := _get_small_win_symbol(result)
+	if not small_symbol.is_empty():
+		slot_result_label.text = "%s 連線！選擇一個小獎攻擊" % small_symbol
+		_show_slot_reward_choices("small")
+		return true
+	slot_result_label.text = "未中獎"
 	_apply_consolation()
+	return false
 
 
-func _add_fragments(symbol_id: String, amount: int) -> void:
-	slot_fragments[symbol_id] = int(slot_fragments.get(symbol_id, 0)) + amount
-	var required := _fragment_required(symbol_id)
-	while int(slot_fragments[symbol_id]) >= required:
-		slot_fragments[symbol_id] = int(slot_fragments[symbol_id]) - required
-		slot_result_label.text = "%s能量滿！自動發動。" % _symbol_name(symbol_id)
-		_trigger_symbol(symbol_id, false)
-
-
-func _fragment_required(symbol_id: String) -> int:
-	if str(slot_symbols[symbol_id]["type"]) == "small":
-		return SMALL_FRAGMENT_MAX
-	return JACKPOT_FRAGMENT_MAX
-
-
-func _trigger_symbol(symbol_id: String, from_line: bool) -> void:
-	var symbol_type := str(slot_symbols[symbol_id]["type"])
-	var popup_text := ""
-	if symbol_type == "small":
-		_trigger_small_symbol(symbol_id)
-		if from_line:
-			slot_result_label.text = "%s連線！發動%s攻擊。" % [_symbol_name(symbol_id), _symbol_name(symbol_id)]
-		popup_text = "發動：%s" % _symbol_name(symbol_id)
-	else:
-		var upgraded: bool = player.grant_jackpot_skill(symbol_id)
-		if symbol_id == "lucky_cat":
-			_sync_lucky_cats()
-		if upgraded:
-			slot_result_label.text = "%s連線！%s升到 LV%d。" % [_symbol_name(symbol_id), _symbol_name(symbol_id), player.get_skill_level(symbol_id)]
-			popup_text = "獲得：%s LV%d" % [_symbol_name(symbol_id), player.get_skill_level(symbol_id)]
+func _is_slot_jackpot(result: Array) -> bool:
+	if result.size() != 3:
+		return false
+	var seven_count := 0
+	var wild_count := 0
+	for symbol in result:
+		if str(symbol) == "7":
+			seven_count += 1
+		elif str(symbol) == "WILD":
+			wild_count += 1
 		else:
-			slot_result_label.text = "%s已 LV5，轉為補償：money +100，回復 50 HP。" % _symbol_name(symbol_id)
-			popup_text = "%s滿級補償：money +100，回復 50 HP" % _symbol_name(symbol_id)
-	_show_slot_popup(popup_text)
+			return false
+	return seven_count >= 2 and wild_count <= 1
+
+
+func _is_slot_small_win(result: Array) -> bool:
+	return not _get_small_win_symbol(result).is_empty()
+
+
+func _get_small_win_symbol(result: Array) -> String:
+	if result.size() != 3:
+		return ""
+	for symbol_id in SLOT_BASE_SYMBOLS:
+		var symbol_count := 0
+		var wild_count := 0
+		for result_symbol in result:
+			if str(result_symbol) == symbol_id:
+				symbol_count += 1
+			elif str(result_symbol) == "WILD":
+				wild_count += 1
+		if wild_count > 1:
+			return ""
+		if symbol_count == 3 or (symbol_count == 2 and wild_count == 1):
+			return symbol_id
+	return ""
+
+
+func _show_slot_reward_choices(reward_kind: String) -> void:
+	if not game_started or not is_instance_valid(player):
+		return
+	var choices := _get_slot_reward_choices(reward_kind)
+	if choices.is_empty():
+		_apply_slot_reward_fallback()
+		return
+	is_slot_reward_menu_open = true
+	current_slot_reward_kind = reward_kind
+	get_tree().paused = true
+	slot_reward_overlay.visible = true
+	var box := _get_menu_box(slot_reward_overlay)
+	_clear_menu_dynamic_children(box)
+
+	var info := Label.new()
+	info.text = "選擇 1 個%s。" % ("永久技能" if reward_kind == "jackpot" else "小獎攻擊")
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(info)
+
+	for skill_id in choices:
+		_add_rich_choice_button(box, _format_slot_reward_choice_bbcode(str(skill_id), reward_kind), _choose_slot_reward.bind(str(skill_id), reward_kind))
+
+
+func _get_slot_reward_choices(reward_kind: String) -> Array[String]:
+	var pool: Array[String] = []
+	if reward_kind == "jackpot":
+		pool.assign(SLOT_JACKPOT_REWARD_IDS)
+	else:
+		for skill_id in SLOT_SMALL_REWARD_IDS:
+			if player.get_small_skill_level(str(skill_id)) < 5:
+				pool.append(str(skill_id))
+	pool.shuffle()
+	var choices: Array[String] = []
+	for skill_id in pool:
+		choices.append(str(skill_id))
+		if choices.size() >= 3:
+			break
+	return choices
+
+
+func _format_slot_reward_choice(skill_id: String, reward_kind: String) -> String:
+	if reward_kind == "jackpot":
+		var level: int = player.get_skill_level(skill_id)
+		if level >= 5:
+			return "%s LV MAX\n已滿級：回復 30%% HP 或 Token +5" % _skill_name(skill_id)
+		return "%s %s -> %s\n%s" % [_skill_name(skill_id), _format_skill_level(level), _format_skill_level(level + 1), _slot_reward_effect_text(skill_id)]
+	var small_level: int = player.get_small_skill_level(skill_id)
+	return "%s %s -> %s\n%s" % [_skill_name(skill_id), _format_skill_level(small_level), _format_skill_level(small_level + 1), _slot_reward_effect_text(skill_id)]
+
+
+func _add_rich_choice_button(box: VBoxContainer, bbcode_text: String, callback: Callable) -> void:
+	var button := Button.new()
+	button.custom_minimum_size = Vector2(680.0, 86.0)
+	button.text = ""
+	button.pressed.connect(callback)
+	var label := RichTextLabel.new()
+	label.bbcode_enabled = true
+	label.text = bbcode_text
+	label.scroll_active = false
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.offset_left = 16.0
+	label.offset_top = 8.0
+	label.offset_right = -16.0
+	label.offset_bottom = -8.0
+	button.add_child(label)
+	box.add_child(button)
+
+
+func _format_slot_reward_choice_bbcode(skill_id: String, reward_kind: String) -> String:
+	if reward_kind == "jackpot":
+		var level: int = player.get_skill_level(skill_id)
+		if level >= 5:
+			return "%s LV MAX\n已滿級：回復 [color=yellow]30%% HP[/color] 或 [color=yellow]Token +5[/color]" % _skill_name(skill_id)
+		return "%s %s → %s\n%s" % [
+			_skill_name(skill_id),
+			_format_skill_level(level),
+			_format_skill_level(level + 1),
+			_jackpot_reward_effect_bbcode(skill_id, level, level + 1)
+		]
+	var small_level: int = player.get_small_skill_level(skill_id)
+	return "%s %s → %s\n%s" % [
+		_skill_name(skill_id),
+		_format_skill_level(small_level),
+		_format_skill_level(small_level + 1),
+		_small_reward_effect_bbcode(skill_id, small_level, small_level + 1)
+	]
+
+
+func _small_reward_effect_bbcode(skill_id: String, current_level: int, next_level: int) -> String:
+	var current_multiplier := _small_skill_display_multiplier(current_level)
+	var next_multiplier := _small_skill_display_multiplier(next_level)
+	match skill_id:
+		"bomb":
+			return "目標 [color=yellow]%s[/color] → [color=yellow]%s[/color]；周圍 [color=yellow]%s[/color] → [color=yellow]%s[/color]" % [
+				_format_percent(100.0 * current_multiplier),
+				_format_percent(100.0 * next_multiplier),
+				_format_percent(75.0 * current_multiplier),
+				_format_percent(75.0 * next_multiplier)
+			]
+		"thunder":
+			return "傷害 [color=yellow]%s[/color] → [color=yellow]%s[/color]；最多 7 道" % [
+				_format_percent(50.0 * current_multiplier),
+				_format_percent(50.0 * next_multiplier)
+			]
+		"fire":
+			return "每秒傷害 [color=yellow]%s[/color] → [color=yellow]%s[/color]；燃燒 3 秒" % [
+				_format_percent(7.0 * current_multiplier),
+				_format_percent(7.0 * next_multiplier)
+			]
+		"ice":
+			return "傷害 [color=yellow]%s[/color] → [color=yellow]%s[/color]；緩速秒數 [color=yellow]%d秒[/color] → [color=yellow]%d秒[/color]" % [
+				_format_percent(50.0 * current_multiplier),
+				_format_percent(50.0 * next_multiplier),
+				0 if current_level <= 0 else 3 + current_level - 1,
+				3 + next_level - 1
+			]
+		"missile":
+			return "每枚傷害 [color=yellow]%s[/color] → [color=yellow]%s[/color]；10 枚" % [
+				_format_percent(30.0 * current_multiplier),
+				_format_percent(30.0 * next_multiplier)
+			]
+	return _slot_reward_effect_text(skill_id)
+
+
+func _jackpot_reward_effect_bbcode(skill_id: String, current_level: int, next_level: int) -> String:
+	match skill_id:
+		"aura_ring":
+			return "刺環傷害已套用 -20%；目前 [color=yellow]%s[/color] → 下級 [color=yellow]%s[/color]" % [_format_skill_level(current_level), _format_skill_level(next_level)]
+		"energy_attack":
+			return "能量攻擊傷害 [color=yellow]64%玩家傷害[/color]，冷卻隨等級縮短。"
+		"slot_777":
+			return "爆炸傷害已套用 -20%；LV1 為 [color=yellow]80%玩家傷害[/color]。"
+		"bounce":
+			return "彈射傷害為 [color=yellow]80%玩家攻擊傷害[/color]。"
+		"multishot":
+			return "額外投射物傷害為 [color=yellow]80%玩家攻擊傷害[/color]。"
+	return _slot_reward_effect_text(skill_id)
+
+
+func _small_skill_display_multiplier(level: int) -> float:
+	if level <= 0:
+		return 0.0
+	return 1.0 + 0.25 * float(level - 1)
+
+
+func _format_percent(value: float) -> String:
+	if abs(value - round(value)) < 0.01:
+		return "%d%%" % int(round(value))
+	return "%.1f%%" % value
+
+
+func _slot_reward_effect_text(skill_id: String) -> String:
+	match skill_id:
+		"bomb":
+			return "每 3 秒自動爆炸：目標 100%，周圍 3 格 75%。"
+		"thunder":
+			return "每 5 秒自動落雷，最多 7 道，每道 50%。"
+		"fire":
+			return "每 10 秒讓可視怪燃燒 3 秒，每秒 7%。"
+		"ice":
+			return "每 5 秒打出 45 度冰霜扇形，傷害 50%，緩速 50%。"
+		"missile":
+			return "每 5 秒發射飛彈轟炸，每枚 30%。"
+		"lucky_cat":
+			return "召喚招財貓撿 Token / 晶片並攻擊。"
+		"bounce":
+			return "玩家攻擊會額外彈射。"
+		"multishot":
+			return "玩家每次攻擊增加投射物。"
+		"slot_777":
+			return "每第 3 次攻擊造成爆炸。"
+		"energy_attack":
+			return "每 60 秒對可視怪造成能量攻擊。"
+		"aura_ring":
+			return "玩家周圍產生持續傷害刺環。"
+	return ""
+
+
+func _choose_slot_reward(skill_id: String, reward_kind: String) -> void:
+	if not is_instance_valid(player):
+		return
+	if reward_kind == "jackpot":
+		if player.get_skill_level(skill_id) >= 5:
+			_apply_slot_reward_fallback()
+		else:
+			var upgraded: bool = player.grant_jackpot_skill(skill_id)
+			if upgraded and skill_id == "lucky_cat":
+				_sync_lucky_cats()
+			slot_result_label.text = "%s升到 %s" % [_skill_name(skill_id), _format_skill_level(player.get_skill_level(skill_id))]
+			_show_slot_popup(slot_result_label.text)
+	else:
+		var upgraded: bool = player.grant_small_skill(skill_id)
+		if upgraded:
+			small_skill_timers[skill_id] = float(SMALL_SKILL_INTERVALS.get(skill_id, 5.0))
+			slot_result_label.text = "%s升到 %s" % [_skill_name(skill_id), _format_skill_level(player.get_small_skill_level(skill_id))]
+			_show_slot_popup(slot_result_label.text)
+		else:
+			_apply_slot_reward_fallback()
+	is_slot_reward_menu_open = false
+	current_slot_reward_kind = ""
+	slot_reward_overlay.visible = false
+	_update_ui()
+	if pending_level_choices > 0 and not _get_available_upgrade_ids().is_empty():
+		_show_level_up_choices()
+	else:
+		get_tree().paused = false
+
+
+func _apply_slot_reward_fallback() -> void:
+	if rng.randi_range(0, 1) == 0:
+		var heal_amount: int = max(1, int(round(float(player.max_health) * 0.3)))
+		player.heal(heal_amount)
+		slot_result_label.text = "滿級補償：回復 %d HP" % heal_amount
+	else:
+		player.add_token(5)
+		slot_result_label.text = "滿級補償：Token +5"
+	_show_slot_popup(slot_result_label.text)
 
 
 func _trigger_small_symbol(symbol_id: String) -> void:
@@ -1471,18 +2076,27 @@ func _trigger_small_symbol(symbol_id: String) -> void:
 			_trigger_missile()
 
 
+func _small_skill_damage_multiplier(symbol_id: String) -> float:
+	if not is_instance_valid(player) or not player.has_method("get_small_skill_level"):
+		return 1.0
+	var level: int = player.get_small_skill_level(symbol_id)
+	if level <= 1:
+		return 1.0
+	return 1.0 + 0.25 * float(level - 1)
+
+
 func _apply_consolation() -> void:
 	var roll := rng.randi_range(0, 1)
 	match roll:
 		0:
-			var heal_amount: int = max(1, int(round(float(player.max_health) * 0.5)))
+			var heal_amount: int = max(1, int(round(float(player.max_health) * 0.3)))
 			player.heal(heal_amount)
-			slot_result_label.text = "沒連線，獲得安慰獎：回復 50% HP。"
+			slot_result_label.text = "未中獎，獲得安慰獎：回復最大生命 30%。"
 			_show_slot_popup("安慰獎：回復 %d HP" % heal_amount)
 		_:
-			var exp_amount: int = max(1, int(round(float(player.experience_to_next) * 0.5)))
+			var exp_amount: int = max(1, int(round(float(player.experience_to_next) * 0.3)))
 			player.add_experience(exp_amount)
-			slot_result_label.text = "沒連線，獲得安慰獎：增加 50% 經驗。"
+			slot_result_label.text = "未中獎，獲得安慰獎：增加目前升級需求 30% 經驗。"
 			_show_slot_popup("安慰獎：增加 %d 經驗" % exp_amount)
 
 
@@ -1495,8 +2109,9 @@ func _trigger_bomb() -> void:
 	)
 	var target: Node2D = enemies[0]
 	var center := target.global_position
-	var primary_damage: int = max(1, int(round(float(player.attack_damage) * 1.5)))
-	var splash_damage: int = max(1, int(round(float(player.attack_damage))))
+	var skill_multiplier := _small_skill_damage_multiplier("bomb")
+	var primary_damage: int = max(1, int(round(float(player.attack_damage) * 1.0 * skill_multiplier)))
+	var splash_damage: int = max(1, int(round(float(player.attack_damage) * 0.75 * skill_multiplier)))
 	var radius := 3.0 * TILE_SIZE
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
@@ -1511,7 +2126,7 @@ func _trigger_bomb() -> void:
 func _trigger_thunder() -> void:
 	var enemies := _get_visible_enemies()
 	enemies.shuffle()
-	var damage: int = max(1, int(round(float(player.attack_damage) * 0.7)))
+	var damage: int = max(1, int(round(float(player.attack_damage) * 0.5 * _small_skill_damage_multiplier("thunder"))))
 	for index in range(min(7, enemies.size())):
 		var enemy := enemies[index]
 		enemy.take_damage(damage)
@@ -1520,27 +2135,39 @@ func _trigger_thunder() -> void:
 
 
 func _trigger_fire() -> void:
-	var damage: int = max(1, int(round(float(player.attack_damage) * 0.15)))
+	var damage: int = max(1, int(round(float(player.attack_damage) * 0.07 * _small_skill_damage_multiplier("fire"))))
 	for enemy in _get_visible_enemies():
 		burning_enemies[enemy] = {"time": 3.0, "tick": 1.0, "damage": damage}
 	_show_area_effect(player.global_position, 460.0, Color(1.0, 0.22, 0.04, 0.28))
 
 
 func _trigger_ice() -> void:
-	var damage: int = max(1, int(round(float(player.attack_damage) * 0.45)))
+	var level: int = max(1, player.get_small_skill_level("ice"))
+	var damage: int = max(1, int(round(float(player.attack_damage) * 0.5 * _small_skill_damage_multiplier("ice"))))
+	var slow_duration: float = 3.0 + float(level - 1)
+	var attack_distance: float = float(player.attack_range) * 2.0
+	var aim_direction: Vector2 = _get_nearest_visible_enemy_direction()
+	var half_angle: float = deg_to_rad(22.5)
+	var hit_points: Array[Vector2] = []
 	for enemy in _get_visible_enemies():
-		enemy.take_damage(damage)
-		_show_damage_number(enemy.global_position, damage)
-		enemy.set_physics_process(false)
-		frozen_enemies[enemy] = 3.0
-	_show_area_effect(player.global_position, 460.0, Color(0.35, 0.85, 1.0, 0.28))
+		var to_enemy: Vector2 = enemy.global_position - player.global_position
+		if to_enemy.length() > attack_distance:
+			continue
+		var angle: float = abs(aim_direction.angle_to(to_enemy.normalized()))
+		if angle <= half_angle:
+			enemy.take_damage(damage)
+			_show_damage_number(enemy.global_position, damage)
+			if enemy.has_method("apply_slow"):
+				enemy.apply_slow(0.5, slow_duration)
+			hit_points.append(enemy.global_position)
+	_show_frost_cone(player.global_position, aim_direction, attack_distance, Color(0.38, 0.88, 1.0, 0.34))
 
 
 func _trigger_missile() -> void:
 	var enemies := _get_visible_enemies()
 	if enemies.is_empty():
 		return
-	var damage: int = max(1, int(round(float(player.attack_damage) * 0.6)))
+	var damage: int = max(1, int(round(float(player.attack_damage) * 0.3 * _small_skill_damage_multiplier("missile"))))
 	for index in range(10):
 		var enemy: Node2D = enemies[index % enemies.size()]
 		if not is_instance_valid(enemy):
@@ -1550,21 +2177,184 @@ func _trigger_missile() -> void:
 		_draw_attack_line(player.global_position, enemy.global_position, Color(1.0, 0.2, 0.2, 0.85), 2.0)
 
 
+func _get_nearest_visible_enemy_direction() -> Vector2:
+	var best_direction := Vector2.RIGHT
+	var best_distance := INF
+	for enemy in _get_visible_enemies():
+		var to_enemy: Vector2 = enemy.global_position - player.global_position
+		var distance := to_enemy.length()
+		if distance < best_distance and distance > 0.001:
+			best_distance = distance
+			best_direction = to_enemy.normalized()
+	return best_direction
+
+
+func _show_frost_cone(origin: Vector2, direction: Vector2, distance: float, color: Color) -> void:
+	var cone := Polygon2D.new()
+	var half_angle := deg_to_rad(22.5)
+	var points := PackedVector2Array([origin])
+	for index in range(12):
+		var t := float(index) / 11.0
+		var angle := -half_angle + half_angle * 2.0 * t
+		points.append(origin + direction.rotated(angle) * distance)
+	cone.polygon = points
+	cone.color = color
+	add_child(cone)
+	var tween := create_tween()
+	tween.tween_property(cone, "modulate:a", 0.0, 0.28)
+	tween.tween_callback(cone.queue_free)
+
+
+func _on_enemy_special_requested(enemy: Node2D, skill_id: String, target_position: Vector2) -> void:
+	if not is_instance_valid(enemy) or not is_instance_valid(player):
+		return
+	match skill_id:
+		"summon_ai":
+			_spawn_boss_elites(enemy.global_position, rng.randi_range(20, 30))
+		"stock_crash":
+			_trigger_boss_stock_crash(target_position)
+		"scan_laser":
+			_trigger_boss_scan_laser(enemy.global_position, target_position)
+		"charge_line":
+			_trigger_boss_charge_warning(enemy.global_position, target_position)
+		"boss_bullet":
+			_spawn_boss_bullet(enemy.global_position, target_position)
+
+
+func _spawn_boss_elites(origin: Vector2, amount: int) -> void:
+	for index in range(amount):
+		var enemy := EnemyScene.instantiate()
+		enemy.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(enemy)
+		enemy.target = player
+		_configure_enemy_kind(enemy, "elite")
+		enemy.scale_combat_stats(_get_enemy_growth_multiplier())
+		enemy.global_position = _get_random_visible_position(48.0)
+		enemy.died.connect(_on_enemy_died)
+		enemy.damaged.connect(_on_enemy_damaged)
+		if enemy.has_signal("special_requested"):
+			enemy.special_requested.connect(_on_enemy_special_requested)
+
+
+func _trigger_boss_charge_warning(origin: Vector2, target_position: Vector2) -> void:
+	var direction := (target_position - origin).normalized()
+	if direction.length() <= 0.001:
+		direction = Vector2.RIGHT
+	var path_length: float = max(get_viewport_rect().size.x, get_viewport_rect().size.y) * BOSS_CHARGE_PATH_LENGTH_RATE
+	var end_position: Vector2 = origin + direction * path_length
+	var line: Line2D = _create_warning_line(origin, end_position, Color(1.0, 0.12, 0.08, 0.55), BOSS_CHARGE_PATH_WIDTH)
+	await get_tree().create_timer(0.8).timeout
+	if is_instance_valid(line):
+		line.queue_free()
+
+
+func _spawn_boss_bullet(origin: Vector2, target_position: Vector2) -> void:
+	if not is_instance_valid(player):
+		return
+	var bullet: Node2D = BossBulletScript.new()
+	bullet.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(bullet)
+	var bullet_speed: float = float(player.speed) * 1.5
+	var bullet_damage: int = max(1, int(round(11.0 * _get_enemy_growth_multiplier())))
+	bullet.call("setup", origin, target_position, bullet_speed, bullet_damage, player)
+
+
+func _trigger_boss_stock_crash(center: Vector2) -> void:
+	if not is_instance_valid(player):
+		return
+	var radius := PLAYER_BODY_RADIUS * 2.0
+	var viewport_size := get_viewport_rect().size
+	var half_size := viewport_size * 0.5
+	var rings: Array[Line2D] = []
+	var centers: Array[Vector2] = []
+	for index in range(40):
+		var target_center := player.global_position + Vector2(rng.randf_range(-half_size.x, half_size.x), rng.randf_range(-half_size.y, half_size.y))
+		centers.append(target_center)
+		rings.append(_create_warning_circle(target_center, radius, Color(1.0, 0.05, 0.05, 0.55)))
+	await get_tree().create_timer(1.5).timeout
+	for ring in rings:
+		if is_instance_valid(ring):
+			ring.queue_free()
+	var did_hit_player := false
+	for target_center in centers:
+		_show_area_effect(target_center, radius, Color(1.0, 0.05, 0.05, 0.38))
+		if not did_hit_player and is_instance_valid(player) and player.global_position.distance_to(target_center) <= radius:
+			did_hit_player = true
+	if did_hit_player and is_instance_valid(player):
+		player.take_damage(max(1, int(round(float(player.max_health) * 0.5))))
+
+
+func _trigger_boss_scan_laser(origin: Vector2, target_position: Vector2) -> void:
+	var direction := (target_position - origin).normalized()
+	if direction.length() <= 0.001:
+		direction = Vector2.RIGHT
+	var laser_length: float = max(get_viewport_rect().size.x, get_viewport_rect().size.y) * 3.0
+	var end_position: Vector2 = origin + direction * laser_length
+	var line: Line2D = _create_warning_line(origin, end_position, Color(1.0, 0.0, 0.0, 0.75), BOSS_SCAN_WARNING_WIDTH)
+	await get_tree().create_timer(1.5).timeout
+	if is_instance_valid(line):
+		line.queue_free()
+	_draw_attack_line(origin, end_position, Color(1.0, 0.05, 0.05, 0.95), BOSS_SCAN_WARNING_WIDTH * 1.7)
+	if is_instance_valid(player) and _distance_to_segment(player.global_position, origin, end_position) <= BOSS_SCAN_DAMAGE_WIDTH:
+		player.take_damage(max(1, int(round(float(player.max_health) * 0.8))))
+
+
+func _create_warning_circle(center: Vector2, radius: float, color: Color) -> Line2D:
+	var ring := Line2D.new()
+	ring.width = 5.0
+	ring.default_color = color
+	ring.closed = true
+	var points := PackedVector2Array()
+	for index in range(64):
+		var angle := TAU * float(index) / 64.0
+		points.append(center + Vector2(cos(angle), sin(angle)) * radius)
+	ring.points = points
+	add_child(ring)
+	return ring
+
+
+func _create_warning_line(from_position: Vector2, to_position: Vector2, color: Color, width: float) -> Line2D:
+	var line := Line2D.new()
+	line.width = width
+	line.default_color = color
+	line.points = PackedVector2Array([from_position, to_position])
+	add_child(line)
+	return line
+
+
+func _distance_to_segment(point: Vector2, segment_start: Vector2, segment_end: Vector2) -> float:
+	var segment := segment_end - segment_start
+	var length_squared := segment.length_squared()
+	if length_squared <= 0.001:
+		return point.distance_to(segment_start)
+	var t: float = clamp((point - segment_start).dot(segment) / length_squared, 0.0, 1.0)
+	return point.distance_to(segment_start + segment * t)
+
+
 func _on_enemy_damaged(enemy_kind: String, damage_amount: int) -> void:
 	if enemy_kind == "boss":
 		boss_damage += damage_amount
 
 
-func _on_enemy_died(enemy_position: Vector2, xp_value: int, money_value: int, enemy_kind: String) -> void:
+func _on_enemy_died(enemy_position: Vector2, xp_value: int, enemy_kind: String) -> void:
 	kill_count += 1
 	_spawn_drop("xp", xp_value, enemy_position + _random_small_offset())
-	var coin_value: int = 5 + player.get_upgrade_skill_level("coin_value") * 3
-	var final_money_value: int = max(1, int(round(float(money_value * coin_value) * player.money_drop_multiplier)))
-	_spawn_drop("money", final_money_value, enemy_position + _random_small_offset())
+	var token_amount := _roll_token_drop(enemy_kind)
+	if token_amount > 0:
+		_spawn_drop("token", token_amount, enemy_position + _random_small_offset())
 	var chip_amount := _roll_chip_drop(enemy_kind)
 	if chip_amount > 0:
 		chip_amount = max(1, int(round(float(chip_amount) * player.chip_drop_multiplier)))
-		_spawn_drop("chip", chip_amount, enemy_position + _random_small_offset())
+		if enemy_kind == "boss" or enemy_kind == "headhunter":
+			player.add_chip(chip_amount)
+			_show_pickup_text(enemy_position, "+%d 晶片" % chip_amount, Color(0.2, 0.95, 1.0))
+		else:
+			_spawn_drop("chip", chip_amount, enemy_position + _random_small_offset())
+	if enemy_kind == "boss":
+		_show_boss_defeat_effect(enemy_position)
+		call_deferred("_update_spawn_timer_by_boss_presence")
+		if elapsed_time >= GAME_DURATION_SECONDS and boss_spawn_index >= BOSS_SPAWN_TIMES.size() and not _has_alive_boss():
+			call_deferred("_end_game", true)
 
 
 func _random_small_offset() -> Vector2:
@@ -1575,10 +2365,27 @@ func _roll_chip_drop(enemy_kind: String) -> int:
 	match enemy_kind:
 		"elite":
 			return 1 if rng.randf() < 0.5 else 0
+		"headhunter":
+			return HEADHUNTER_CHIP_DROP_AMOUNT
 		"boss":
-			return 5
+			return BOSS_CHIP_DROP_AMOUNT
 		_:
 			return 0
+
+
+func _roll_token_drop(enemy_kind: String) -> int:
+	var drop_bonus := 0.07 * float(player.get_upgrade_skill_level("cost_rate")) if is_instance_valid(player) else 0.0
+	match enemy_kind:
+		"elite":
+			return 1 if rng.randf() < min(0.95, ELITE_TOKEN_DROP_CHANCE + drop_bonus) else 0
+		"headhunter":
+			return HEADHUNTER_TOKEN_DROP_AMOUNT
+		"boss", "small_boss", "stage_boss":
+			return BOSS_TOKEN_DROP_AMOUNT
+		_:
+			if elapsed_time >= 300.0:
+				return 0
+			return 1 if rng.randf() < min(0.95, NORMAL_TOKEN_DROP_CHANCE + drop_bonus) else 0
 
 
 func _spawn_drop(kind: String, amount: int, drop_position: Vector2) -> void:
@@ -1593,8 +2400,9 @@ func _spawn_drop(kind: String, amount: int, drop_position: Vector2) -> void:
 func _on_drop_collected(kind: String, amount: int) -> void:
 	if not is_instance_valid(player):
 		return
-	if kind == "money":
-		player.add_money(amount)
+	if kind == "token":
+		player.add_token(amount)
+		_show_pickup_text(player.global_position, "+%d Token" % amount, Color(1.0, 0.46, 0.95))
 	elif kind == "chip":
 		player.add_chip(amount)
 		_show_pickup_text(player.global_position, "+%d 晶片" % amount, Color(0.2, 0.95, 1.0))
@@ -1619,22 +2427,42 @@ func _symbol_name(symbol_id: String) -> String:
 	return str(slot_symbols[symbol_id]["name"])
 
 
+func _skill_name(skill_id: String) -> String:
+	match skill_id:
+		"bomb":
+			return "炸彈"
+		"thunder":
+			return "落雷"
+		"fire":
+			return "火焰風暴"
+		"ice":
+			return "冰霜"
+		"missile":
+			return "飛彈轟炸"
+		"lucky_cat":
+			return "招財貓"
+		"bounce":
+			return "彈射"
+		"multishot":
+			return "多重"
+		"slot_777":
+			return "777爆炸"
+		"energy_attack", "money_attack":
+			return "能量攻擊"
+		"aura_ring":
+			return "刺環"
+		"dice_split":
+			return "骰子分裂"
+	return skill_id
+
+
 func _update_slot_ui() -> void:
 	if slot_money_label == null or not is_instance_valid(player):
 		return
 	var slot_cost := _get_slot_cost()
-	slot_money_label.text = "目前 money：%d" % player.money
-	slot_cost_label.text = "每次轉動：%d money｜Space 或按鈕" % slot_cost
-	slot_spin_button.disabled = is_slot_spinning or player.money < slot_cost
-	var fragment_lines := ["碎片進度："]
-	for symbol_id in slot_symbols.keys():
-		fragment_lines.append("%s %d/%d" % [_symbol_name(symbol_id), int(slot_fragments[symbol_id]), _fragment_required(symbol_id)])
-	slot_fragment_label.text = "\n".join(fragment_lines)
-	var skill_lines := ["大獎技能："]
-	for skill_id in player.jackpot_skills.keys():
-		var level: int = player.get_skill_level(skill_id)
-		skill_lines.append("%s %s" % [_symbol_name(skill_id), "未取得" if level == 0 else "LV%d/5" % level])
-	slot_skill_label.text = "\n".join(skill_lines)
+	slot_money_label.text = "Slot代幣：%d" % player.slot_tokens
+	slot_cost_label.text = "每次轉動：%d Token｜Space 或按鈕" % slot_cost
+	slot_spin_button.disabled = is_slot_spinning or player.slot_tokens < slot_cost
 
 
 func _show_slot_popup(text: String) -> void:
@@ -1652,6 +2480,30 @@ func _show_slot_popup(text: String) -> void:
 		slot_popup_label.visible = false
 		slot_popup_label.modulate.a = 1.0
 	)
+
+
+func _show_top_notice(text: String, color := Color(1.0, 0.9, 0.22)) -> void:
+	if hud_layer == null or text.is_empty():
+		return
+	var label := Label.new()
+	label.text = text
+	label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	label.offset_left = 0.0
+	label.offset_top = 36.0
+	label.offset_right = 0.0
+	label.offset_bottom = 96.0
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 34)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.95))
+	label.add_theme_constant_override("shadow_offset_x", 3)
+	label.add_theme_constant_override("shadow_offset_y", 3)
+	hud_layer.add_child(label)
+	var tween := create_tween()
+	tween.tween_interval(2.0)
+	tween.tween_property(label, "modulate:a", 0.0, 0.25)
+	tween.tween_callback(label.queue_free)
 
 
 func _on_player_attack_performed(from_position: Vector2, target_position: Vector2, damage_amount: int) -> void:
@@ -1753,6 +2605,14 @@ func _show_area_effect(center: Vector2, radius: float, color: Color) -> void:
 	tween.tween_callback(ring.queue_free)
 
 
+func _show_boss_defeat_effect(center: Vector2) -> void:
+	_show_top_notice("Boss 擊破！", Color(1.0, 0.86, 0.22))
+	_show_area_effect(center, 180.0, Color(1.0, 0.82, 0.08, 0.45))
+	for index in range(10):
+		var angle := TAU * float(index) / 10.0
+		_draw_attack_line(center, center + Vector2(cos(angle), sin(angle)) * 190.0, Color(1.0, 0.72, 0.18, 0.9), 4.0)
+
+
 func _on_player_died() -> void:
 	_end_game(false)
 
@@ -1765,7 +2625,7 @@ func _end_game(win: bool) -> void:
 	total_chips += player.chip_pickups
 	_save_current_slot()
 	if not win:
-		player.money = 0
+		player.slot_tokens = 0
 		player.stats_changed.emit()
 	spawn_timer.stop()
 	if is_instance_valid(player):
@@ -1799,6 +2659,10 @@ func _return_to_lobby_after_run() -> void:
 	for drop in get_tree().get_nodes_in_group("drops"):
 		if is_instance_valid(drop):
 			drop.queue_free()
+	electric_fence_active = false
+	if is_instance_valid(electric_fence_line):
+		electric_fence_line.queue_free()
+	electric_fence_line = null
 	_show_lobby()
 
 
@@ -1828,7 +2692,7 @@ func _update_ui() -> void:
 	exp_label.text = "經驗 %d / %d" % [player.experience, player.experience_to_next]
 	exp_bar.max_value = player.experience_to_next
 	exp_bar.value = player.experience
-	money_label.text = "金錢 %d" % player.money
+	money_label.text = "Slot代幣 %d" % player.slot_tokens
 	chip_label.text = "本局晶片 %d｜永久晶片 %d" % [player.chip_pickups, total_chips]
 	_update_equipped_hud()
 	_update_slot_ui()

@@ -31,12 +31,6 @@ func _process(delta: float) -> void:
 	if pickup_multiplier != null:
 		active_pickup_radius *= float(pickup_multiplier)
 
-	var lucky_cat_count = 0
-	if player.has_method("get_skill_level"):
-		lucky_cat_count = player.get_skill_level("lucky_cat")
-	if kind == "money" and lucky_cat_count > 0:
-		active_pickup_radius *= 2.4
-
 	var distance := global_position.distance_to(player.global_position)
 	if distance <= active_pickup_radius:
 		is_attracted = true
@@ -49,9 +43,9 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	if kind == "money":
-		draw_circle(Vector2.ZERO, 8.0, Color(1.0, 0.78, 0.12))
-		draw_circle(Vector2.ZERO, 4.0, Color(1.0, 0.95, 0.42))
+	if kind == "token":
+		draw_circle(Vector2.ZERO, 8.0, Color(1.0, 0.22, 0.9))
+		draw_circle(Vector2.ZERO, 4.0, Color(1.0, 0.78, 1.0))
 	elif kind == "chip":
 		draw_rect(Rect2(Vector2(-7.0, -6.0), Vector2(14.0, 12.0)), Color(0.2, 0.95, 1.0))
 		draw_rect(Rect2(Vector2(-3.0, -2.0), Vector2(6.0, 4.0)), Color(0.02, 0.12, 0.18))

@@ -22,12 +22,11 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 
-	var money_drop := _find_nearest_money_drop()
-	if money_drop != null:
-		global_position = global_position.move_toward(money_drop.global_position, move_speed * delta)
-		if global_position.distance_to(money_drop.global_position) <= 18.0:
-			player.add_money(money_drop.amount)
-			money_drop.queue_free()
+	var collectible_drop := _find_nearest_collectible_drop()
+	if collectible_drop != null:
+		global_position = global_position.move_toward(collectible_drop.global_position, move_speed * delta)
+		if global_position.distance_to(collectible_drop.global_position) <= 18.0:
+			_collect_drop(collectible_drop)
 	else:
 		var follow_position: Vector2 = player.global_position + follow_offset
 		global_position = global_position.move_toward(follow_position, move_speed * delta)
@@ -40,14 +39,14 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
-func _find_nearest_money_drop() -> Node2D:
+func _find_nearest_collectible_drop() -> Node2D:
 	var nearest: Node2D = null
 	var nearest_distance: float = _max_distance_from_player()
 
 	for drop in get_tree().get_nodes_in_group("drops"):
 		if not is_instance_valid(drop):
 			continue
-		if drop.kind != "money":
+		if not ["token", "chip"].has(str(drop.kind)):
 			continue
 		if player.global_position.distance_to(drop.global_position) > _max_distance_from_player():
 			continue
@@ -58,6 +57,15 @@ func _find_nearest_money_drop() -> Node2D:
 			nearest_distance = distance
 
 	return nearest
+
+
+func _collect_drop(drop: Node2D) -> void:
+	match str(drop.kind):
+		"token":
+			player.add_token(int(drop.amount))
+		"chip":
+			player.add_chip(int(drop.amount))
+	drop.queue_free()
 
 
 func _max_distance_from_player() -> float:
