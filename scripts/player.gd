@@ -2,110 +2,281 @@ extends CharacterBody2D
 
 signal stats_changed
 signal died
-signal attack_performed(from_position: Vector2, target_position: Vector2, damage_amount: int)
-signal area_effect(center: Vector2, radius: float, color: Color)
-signal level_up_notice(text: String)
-signal level_up_available
+signal attack_requested(origin: Vector2, target_position: Vector2, attack_data: Dictionary)
+signal area_preview_changed(center: Vector2, radius: float, visible: bool)
+signal wall_blocked(pos: Vector2)
 
-@export var speed := 260.0
-@export var max_health := 100
-@export var attack_damage := 26
-@export var attack_range := 170.0
-@export var attack_cooldown := 0.65
+const TILE_SIZE := 64.0
+const MAX_HEALTH := 5
 
-var health := 100
-var level := 1
-var experience := 0
-var experience_to_next := 25
-var slot_tokens := 0
-var chip_pickups := 0
-var pickup_range_multiplier := 1.70
-var chip_drop_multiplier := 1.0
+var class_id := "warrior"
+var character_name := "戰士"
+var speed := 260.0
+var max_health := MAX_HEALTH
+var health := MAX_HEALTH
+var attack_damage := 2.0
+var attack_range_tiles := 2.0
+var attacks_per_second := 2.0
+var attack_mode := "cone"
 var crit_chance := 0.0
-var regen_per_second := 0.0
-var extra_lives := 0
-var defense_reduction := 0.0
+var skill_area_bonus := 0.0
+var selected_skills: Dictionary = {}
+var level := 1
 
-var jackpot_skills := {
-	"aura_ring": 0,
-	"bounce": 0,
-	"multishot": 0,
-	"dice_split": 0,
-	"slot_777": 0,
-	"energy_attack": 0,
-	"lucky_cat": 0
-}
-
-var small_skills := {
-	"bomb": 0,
-	"thunder": 0,
-	"fire": 0,
-	"ice": 0,
-	"missile": 0
-}
-
-var upgrade_skills := {
-	"crit": 0,
-	"jackpot_rate": 0,
-	"cost_rate": 0,
-	"fragment_amount": 0,
-	"reroll_rate": 0,
-	"line_rate": 0,
-	"damage": 0,
-	"attack_speed": 0,
-	"experience": 0,
-	"move_speed": 0
-}
-
+var invincible_timer := 0.0
+var _wall_cd := 0.0        # 門清盾牌冷卻
 var _attack_timer := 0.0
-var _hit_flash_timer := 0.0
-var _attack_count := 0
-var _regen_pool := 0.0
+var _heal_pending := false
+var _heal_timer := 0.0
+var _held_attack := false
+var _aim_position := Vector2.ZERO
+var _player_texture: Texture2D
 var _dash_cooldown_timer := 0.0
 var _dash_timer := 0.0
 var _dash_direction := Vector2.RIGHT
 var _last_move_direction := Vector2.RIGHT
-var _player_texture: Texture2D
-var _lucky_cat_texture: Texture2D
+var _attack_move_lock := 0.0     # 攻擊後短暫鎖定移動
+
+# ── 動畫系統 ──
+var _anim_state := "idle"      # idle | walk | charge | attack | cast
+var _anim_dir := "d"           # d u l r dl dr ul ur
+var _anim_frame := 0           # 走路幀 0-3
+var _anim_frame_timer := 0.0
+var _anim_override_timer := 0.0  # attack / cast 持續時間倒計時
+
+# 戰士集氣（0.3s 延遲才打出傷害）
+var _warrior_charging := false
+var _warrior_charge_timer := 0.0
+var _warrior_pending_data: Dictionary = {}
+
+# 戰士動畫紋理快取
+var _wt_idle: Texture2D
+var _wt_charge: Texture2D
+var _wt_attack: Texture2D
+var _wt_cast: Texture2D
+var _wt_walk: Dictionary = {}
 
 
 func _ready() -> void:
 	add_to_group("player")
+	collision_layer = 1
+	collision_mask = 3
 	_player_texture = load("res://AIgame_rougelike/assets/art/characters/player/player_core.png")
-	_lucky_cat_texture = load("res://AIgame_rougelike/assets/art/characters/pets/lucky_cat.png")
 	health = max_health
 	stats_changed.emit()
 
 
-func _physics_process(delta: float) -> void:
-	if health <= 0:
-		return
+func setup_character(id: String) -> void:
+	class_id = id
+	match id:
+		"archer":
+			_player_texture = load("res://AIgame_rougelike/assets/art/characters/player/archer.png")
+			character_name = "弓手"
+			attack_damage = 1.0
+			attack_range_tiles = 5.0
+			attacks_per_second = 3.0
+			attack_mode = "single"
+			crit_chance = 0.10
+			skill_area_bonus = 0.0
+		"mage":
+			_player_texture = load("res://AIgame_rougelike/assets/art/characters/player/mage.png")
+			character_name = "法師"
+			attack_damage = 1.0
+			attack_range_tiles = 5.0
+			attacks_per_second = 0.5
+			attack_mode = "area"
+			crit_chance = 0.0
+			skill_area_bonus = 0.20
+		_:  # warrior
+			_player_texture = load("res://AIgame_rougelike/assets/art/characters/player/warrior.png")
+			character_name = "戰士"
+			attack_damage = 2.0
+			attack_range_tiles = 3.0
+			attacks_per_second = 1.0
+			attack_mode = "cone"
+			crit_chance = 0.0
+			skill_area_bonus = 0.0
+			_load_warrior_textures()
+	max_health = MAX_HEALTH
+	health = max_health
+	selected_skills.clear()
+	level = 1
+	invincible_timer = 0.0
+	_attack_timer = 0.0
+	_heal_pending = false
+	_heal_timer = 0.0
+	_dash_cooldown_timer = 0.0
+	_dash_timer = 0.0
+	_dash_direction = Vector2.RIGHT
+	_last_move_direction = Vector2.RIGHT
+	_attack_move_lock = 0.0
+	_wall_cd = 0.0
+	_anim_state = "idle"
+	_anim_dir = "d"
+	_anim_frame = 0
+	_warrior_charging = false
+	_warrior_charge_timer = 0.0
+	stats_changed.emit()
+	queue_redraw()
 
-	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+
+func _load_warrior_textures() -> void:
+	var base: String = "res://AIgame_rougelike/assets/art/characters/player/warrior/"
+	var walk_base: String = base + "warrior_walk/"
+
+	_wt_idle = _try_load(base + "idle.png")
+	_wt_charge = _try_load(base + "charge.png")
+	_wt_attack = _try_load(base + "attack.png")
+	_wt_cast = _try_load(base + "cast.png")
+
+	for direc: String in ["d", "u", "l", "r", "dl", "dr", "ul", "ur"]:
+		var frames: Array[Texture2D] = []
+
+		for f: int in range(1, 10):
+			var path: String = walk_base + "walk_%s_%02d.png" % [direc, f]
+			var tex: Texture2D = _try_load(path)
+
+			if tex != null:
+				frames.append(tex)
+
+		_wt_walk[direc] = frames
+
+
+func _try_load(path: String) -> Texture2D:
+	if ResourceLoader.exists(path):
+		return load(path)
+	return null
+
+
+func _physics_process(delta: float) -> void:
+	var input_direction: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if input_direction.length() > 0.001:
 		_last_move_direction = input_direction.normalized()
+	_wall_cd = maxf(_wall_cd - delta, 0.0)
+	_attack_move_lock = maxf(_attack_move_lock - delta, 0.0)
 	_dash_cooldown_timer = max(_dash_cooldown_timer - delta, 0.0)
 	if _dash_timer > 0.0:
 		_dash_timer -= delta
 		velocity = _dash_direction * speed * 3.2
+		collision_mask = 1   # dash 穿越敵人
 	else:
-		velocity = input_direction * speed
+		collision_mask = 3
+		if _held_attack or _attack_move_lock > 0.0 or _warrior_charging:
+			velocity = Vector2.ZERO
+		else:
+			velocity = input_direction * speed
 	move_and_slide()
 
-	if regen_per_second > 0.0 and health < max_health:
-		_regen_pool += regen_per_second * delta
-		var heal_amount := int(floor(_regen_pool))
-		if heal_amount > 0:
-			_regen_pool -= heal_amount
-			heal(heal_amount)
+	invincible_timer = max(invincible_timer - delta, 0.0)
+	if _heal_pending:
+		_heal_timer -= delta
+		if _heal_timer <= 0.0:
+			_heal_pending = false
+			if health > 0 and health < max_health:
+				health += 1
+				stats_changed.emit()
 
-	_attack_timer -= delta
-	if _attack_timer <= 0.0:
-		_auto_attack()
+	_attack_timer = max(_attack_timer - delta, 0.0)
+	_aim_position = get_global_mouse_position()
+	_held_attack = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	if attack_mode == "area":
+		var radius: float = get_mage_area_radius()
+		area_preview_changed.emit(_aim_position, radius, true)
+	else:
+		area_preview_changed.emit(Vector2.ZERO, 0.0, false)
 
-	if _hit_flash_timer > 0.0:
-		_hit_flash_timer -= delta
-		queue_redraw()
+	# ── 戰士集氣處理 ──
+	if _warrior_charging:
+		_warrior_charge_timer -= delta
+		if _warrior_charge_timer <= 0.0:
+			_warrior_charging = false
+			_attack_move_lock = 0.2
+			if not _warrior_pending_data.is_empty():
+				attack_requested.emit(global_position, _warrior_pending_data["target"], _warrior_pending_data["data"])
+				_warrior_pending_data.clear()
+			_anim_override_timer = 0.25
+			_anim_state = "attack"
+
+	# ── 攻擊觸發 ──
+	if _held_attack and _attack_timer <= 0.0:
+		var interval: float = 1.0 / max(0.05, attacks_per_second)
+		_attack_timer = interval
+		if class_id == "warrior" and not _warrior_charging:
+			_warrior_charging = true
+			_warrior_charge_timer = 0.3
+			_anim_state = "charge"
+			var tgt_pos: Vector2 = _aim_position
+			if global_position.distance_to(tgt_pos) > get_attack_range():
+				tgt_pos = global_position + global_position.direction_to(tgt_pos) * get_attack_range()
+			_warrior_pending_data = {
+				"target": tgt_pos,
+				"data": {
+					"damage": attack_damage,
+					"mode": attack_mode,
+					"range": get_attack_range(),
+					"cone_angle": 90.0,
+					"area_radius": get_mage_area_radius(),
+					"crit_chance": crit_chance,
+					"skills": selected_skills.duplicate(true)
+				}
+			}
+		else:
+			_request_attack()
+			_attack_move_lock = 0.2
+			if class_id != "warrior":
+				_anim_override_timer = 0.2
+				_anim_state = "attack"
+
+	# ── 更新動畫狀態 ──
+	_update_animation(delta, input_direction)
+
+	queue_redraw()
+
+
+func _update_animation(delta: float, input_dir: Vector2) -> void:
+	if _anim_override_timer > 0.0:
+		_anim_override_timer -= delta
+		if _anim_override_timer <= 0.0 and _anim_state in ["attack", "cast"]:
+			_anim_state = "idle"
+		return
+
+	if _warrior_charging:
+		_anim_state = "charge"
+		return
+
+	if input_dir.length() > 0.001:
+		_anim_dir = _vec_to_dir(input_dir)
+
+	if velocity.length() > 10.0:
+		_anim_state = "walk"
+		_anim_frame_timer += delta
+		if _anim_frame_timer >= 0.11:
+			_anim_frame_timer = 0.0
+			_anim_frame = (_anim_frame + 1) % 9
+	else:
+		_anim_state = "idle"
+		_anim_frame = 0
+		_anim_frame_timer = 0.0
+
+
+func _vec_to_dir(v: Vector2) -> String:
+	var angle := v.angle()
+	var octant := int(round(angle / (PI / 4.0))) % 8
+	match octant:
+		0:       return "r"
+		1:       return "dr"
+		2:       return "d"
+		3:       return "dl"
+		4, -4:   return "l"
+		-3:      return "ul"
+		-2:      return "u"
+		-1:      return "ur"
+		_:       return "d"
+
+
+func trigger_cast_animation() -> void:
+	_anim_state = "cast"
+	_anim_override_timer = 0.5
 
 
 func request_dash() -> void:
@@ -116,319 +287,128 @@ func request_dash() -> void:
 	_dash_cooldown_timer = 1.0
 
 
-func _auto_attack() -> void:
-	var targets := _get_targets_in_range(1 + get_skill_level("multishot"))
-	if targets.is_empty():
+func _request_attack() -> void:
+	var interval: float = 1.0 / max(0.05, attacks_per_second)
+	_attack_timer = interval
+	var target_position: Vector2 = _aim_position
+	if global_position.distance_to(target_position) > get_attack_range():
+		target_position = global_position + global_position.direction_to(target_position) * get_attack_range()
+	var data: Dictionary = {
+		"damage": attack_damage,
+		"mode": attack_mode,
+		"range": get_attack_range(),
+		"cone_angle": 90.0,
+		"area_radius": get_mage_area_radius(),
+		"crit_chance": crit_chance,
+		"skills": selected_skills.duplicate(true)
+	}
+	attack_requested.emit(global_position, target_position, data)
+
+
+func take_damage(_amount := 1) -> void:
+	if health <= 0 or invincible_timer > 0.0:
 		return
-
-	_attack_count += 1
-	var hit_targets: Array[Node2D] = []
-	for index in range(targets.size()):
-		var target: Node2D = targets[index]
-		var damage: int = _roll_attack_damage()
-		if index > 0:
-			damage = max(1, int(round(float(damage) * 0.8)))
-		_damage_enemy(target, damage, global_position)
-		hit_targets.append(target)
-
-	var primary_target: Node2D = targets[0]
-	var bounce_level := get_skill_level("bounce")
-	if bounce_level > 0:
-		_bounce_from_target(primary_target, bounce_level, hit_targets)
-
-	var split_level := get_skill_level("dice_split")
-	if split_level > 0:
-		_split_from_target(primary_target, hit_targets, split_level)
-
-	var explosion_level := get_skill_level("slot_777")
-	if explosion_level > 0 and _attack_count % 3 == 0:
-		_explode_at(primary_target.global_position, explosion_level)
-
-	_attack_timer = attack_cooldown
-
-
-func _roll_attack_damage() -> int:
-	var amount := attack_damage
-	if randf() < crit_chance:
-		amount = int(round(float(amount) * 2.0))
-	return max(1, amount)
-
-
-func _get_targets_in_range(limit: int) -> Array[Node2D]:
-	var candidates: Array[Dictionary] = []
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(enemy) or not enemy.has_method("take_damage"):
-			continue
-		var distance: float = global_position.distance_to(enemy.global_position)
-		if distance <= attack_range:
-			candidates.append({"enemy": enemy, "distance": distance})
-
-	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return float(a["distance"]) < float(b["distance"])
-	)
-
-	var targets: Array[Node2D] = []
-	for entry in candidates:
-		targets.append(entry["enemy"])
-		if targets.size() >= limit:
-			break
-	return targets
-
-
-func _damage_enemy(enemy: Node2D, amount: int, from_position: Vector2) -> void:
-	if not is_instance_valid(enemy):
+	# 門清：盾牌格擋（不影響 invincible_timer，獨立冷卻）
+	var wall_lv: int = get_skill_level("mahjong_wall")
+	if wall_lv > 0 and _wall_cd <= 0.0:
+		var wall_cd_table: Array = [0, 6.0, 5.0, 4.0, 3.0, 2.5, 2.0]
+		_wall_cd = float(wall_cd_table[wall_lv])
+		wall_blocked.emit(global_position)
 		return
-	var target_position := enemy.global_position
-	enemy.take_damage(amount)
-	attack_performed.emit(from_position, target_position, amount)
-
-
-func _bounce_from_target(start_target: Node2D, max_bounces: int, hit_targets: Array[Node2D]) -> void:
-	var current_target := start_target
-	for _bounce_index in range(max_bounces):
-		if not is_instance_valid(current_target):
-			return
-		var next_target := _find_nearest_enemy(current_target.global_position, 170.0, hit_targets)
-		if next_target == null:
-			return
-		var bounce_damage: int = max(1, int(round(float(_roll_attack_damage()) * 0.8)))
-		_damage_enemy(next_target, bounce_damage, current_target.global_position)
-		hit_targets.append(next_target)
-		current_target = next_target
-
-
-func _split_from_target(primary_target: Node2D, hit_targets: Array[Node2D], split_count: int) -> void:
-	if not is_instance_valid(primary_target):
-		return
-	var split_hits := 0
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if split_hits >= split_count:
-			return
-		if enemy == primary_target or not is_instance_valid(enemy) or not enemy.has_method("take_damage"):
-			continue
-		if hit_targets.has(enemy):
-			continue
-		if primary_target.global_position.distance_to(enemy.global_position) <= 130.0:
-			var split_damage: int = max(1, int(round(float(attack_damage) * 0.5)))
-			_damage_enemy(enemy, split_damage, primary_target.global_position)
-			hit_targets.append(enemy)
-			split_hits += 1
-
-
-func _explode_at(center: Vector2, skill_level: int) -> void:
-	var explosion_radius := 128.0
-	var damage_multiplier := 1.0 + 0.5 * float(skill_level - 1)
-	var damage: int = max(1, int(round(float(attack_damage) * damage_multiplier * 0.8)))
-	area_effect.emit(center, explosion_radius, Color(1.0, 0.48, 0.08, 0.35))
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(enemy) or not enemy.has_method("take_damage"):
-			continue
-		if center.distance_to(enemy.global_position) <= explosion_radius:
-			_damage_enemy(enemy, damage, center)
-
-
-func _find_nearest_enemy(origin: Vector2, max_distance: float, ignored: Array[Node2D]) -> Node2D:
-	var nearest_enemy: Node2D = null
-	var nearest_distance := max_distance
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(enemy) or not enemy.has_method("take_damage"):
-			continue
-		if ignored.has(enemy):
-			continue
-		var distance: float = origin.distance_to(enemy.global_position)
-		if distance <= nearest_distance:
-			nearest_enemy = enemy
-			nearest_distance = distance
-	return nearest_enemy
-
-
-func take_damage(amount: int) -> void:
-	if health <= 0:
-		return
-	var final_amount: int = max(1, int(ceil(float(amount) * (1.0 - clamp(defense_reduction, 0.0, 0.85)))))
-	health = max(health - final_amount, 0)
-	_hit_flash_timer = 0.12
+	health = max(health - 1, 0)
+	invincible_timer = 0.8
+	if class_id == "warrior" and health > 0:
+		_heal_pending = true
+		_heal_timer = 60.0
 	stats_changed.emit()
 	queue_redraw()
 	if health <= 0:
-		if extra_lives > 0:
-			extra_lives -= 1
-			health = max(1, int(round(float(max_health) * 0.5)))
-			stats_changed.emit()
-		else:
-			died.emit()
+		died.emit()
 
 
-func add_experience(amount: int) -> void:
-	var gained: int = max(1, int(round(float(amount) * (1.0 + 0.1 * float(get_upgrade_skill_level("experience"))))))
-	experience += gained
-	var level_count := 0
-	while experience >= experience_to_next:
-		experience -= experience_to_next
-		level += 1
-		_apply_level_stat_growth()
-		experience_to_next = _calculate_next_experience_requirement()
-		level_count += 1
-	stats_changed.emit()
-	for _index in range(level_count):
-		level_up_notice.emit("LV UP！")
-		level_up_available.emit()
+func get_attack_range() -> float:
+	return attack_range_tiles * TILE_SIZE
 
 
-func _calculate_next_experience_requirement() -> int:
-	var multiplier := 1.18
-	if level > 10:
-		multiplier += min(0.82, pow(float(level - 10), 1.25) * 0.018)
-	var flat_bonus := 8 + int(round(float(level) * 1.5))
-	return max(experience_to_next + 1, int(round(float(experience_to_next) * multiplier)) + flat_bonus)
+func get_mage_area_radius() -> float:
+	return 3.0 * TILE_SIZE * (1.0 + skill_area_bonus)
 
 
-func _apply_level_stat_growth() -> void:
-	attack_damage = max(attack_damage + 1, int(round(float(attack_damage) * 1.05)))
-	attack_cooldown = max(0.12, attack_cooldown / 1.05)
-	var old_max := max_health
-	max_health = max(max_health + 1, int(round(float(max_health) * 1.10)))
-	health = min(max_health, health + max_health - old_max)
-	pickup_range_multiplier *= 1.05
-	crit_chance += 0.02
-
-
-func add_token(amount: int) -> void:
-	slot_tokens += amount
-	stats_changed.emit()
-
-
-func add_chip(amount: int) -> void:
-	chip_pickups += amount
-	stats_changed.emit()
-
-
-func spend_token(amount: int) -> bool:
-	if slot_tokens < amount:
+func grant_skill(skill_id: String) -> bool:
+	var current: int = int(selected_skills.get(skill_id, 0))
+	if current >= 6:
 		return false
-	slot_tokens -= amount
+	if current == 0 and selected_skills.size() >= 5:
+		return false
+	selected_skills[skill_id] = current + 1
 	stats_changed.emit()
 	return true
 
 
-func heal(amount: int) -> void:
-	health = min(max_health, health + amount)
-	stats_changed.emit()
-
-
-func grant_jackpot_skill(skill_id: String) -> bool:
-	if skill_id == "money_attack":
-		skill_id = "energy_attack"
-	if not jackpot_skills.has(skill_id):
-		return false
-	var current_level := int(jackpot_skills[skill_id])
-	if current_level >= 5:
-		return false
-	jackpot_skills[skill_id] = current_level + 1
-	queue_redraw()
-	stats_changed.emit()
-	return true
-
-
-func grant_small_skill(skill_id: String) -> bool:
-	if not small_skills.has(skill_id):
-		return false
-	var current_level := int(small_skills[skill_id])
-	if current_level >= 5:
-		return false
-	small_skills[skill_id] = current_level + 1
-	stats_changed.emit()
-	return true
+func has_skill_capacity_for(skill_id: String) -> bool:
+	return selected_skills.has(skill_id) or selected_skills.size() < 5
 
 
 func get_skill_level(skill_id: String) -> int:
-	if skill_id == "money_attack":
-		skill_id = "energy_attack"
-	return int(jackpot_skills.get(skill_id, 0))
+	return int(selected_skills.get(skill_id, 0))
 
 
-func get_small_skill_level(skill_id: String) -> int:
-	return int(small_skills.get(skill_id, 0))
-
-
-func get_upgrade_skill_level(skill_id: String) -> int:
-	return int(upgrade_skills.get(skill_id, 0))
-
-
-func is_upgrade_skill_maxed(skill_id: String) -> bool:
-	return get_upgrade_skill_level(skill_id) >= 5
-
-
-func apply_upgrade_skill(skill_id: String) -> bool:
-	if not upgrade_skills.has(skill_id) or is_upgrade_skill_maxed(skill_id):
-		return false
-	upgrade_skills[skill_id] = get_upgrade_skill_level(skill_id) + 1
-	match skill_id:
-		"crit":
-			crit_chance += 0.07
-		"damage":
-			attack_damage = max(attack_damage + 1, int(round(float(attack_damage) * 1.1)))
-		"attack_speed":
-			attack_cooldown = max(0.12, attack_cooldown / 1.1)
-		"move_speed":
-			speed *= 1.1
+func set_skill_level_direct(skill_id: String, lv: int) -> void:
+	if lv <= 0:
+		selected_skills.erase(skill_id)
+	else:
+		selected_skills[skill_id] = clamp(lv, 1, 6)
 	stats_changed.emit()
-	return true
-
-
-func apply_research_effect(effect_id: String, level: int = 1) -> void:
-	match effect_id:
-		"start_damage_50":
-			attack_damage = max(attack_damage + 1, int(round(float(attack_damage) * (1.0 + float(50 + 20 * (level - 1)) / 100.0))))
-		"crit_20":
-			crit_chance += float(20 + 10 * (level - 1)) / 100.0
-		"random_jackpot_skill":
-			var choices := jackpot_skills.keys()
-			grant_jackpot_skill(str(choices.pick_random()))
-		"regen_2":
-			regen_per_second += float(2 + level - 1)
-		"extra_life":
-			extra_lives += level
-		"chip_drop_x2":
-			chip_drop_multiplier *= float(1 + level)
-		"defense_20":
-			defense_reduction += float(20 + 10 * (level - 1)) / 100.0
-	stats_changed.emit()
-
-
-func _apply_research_normal_skill(skill_id: String) -> void:
-	match skill_id:
-		"damage":
-			attack_damage = max(attack_damage + 1, int(round(float(attack_damage) * 1.3)))
-		"attack_speed":
-			attack_cooldown = max(0.12, attack_cooldown / 1.3)
-		"move_speed":
-			speed *= 1.15
-		"pickup_range":
-			pickup_range_multiplier *= 1.3
 
 
 func _draw() -> void:
-	var body_color := Color(0.15, 0.55, 1.0)
-	if _hit_flash_timer > 0.0:
-		body_color = Color(1.0, 0.95, 0.95)
+	var alpha: float = 1.0
+	if invincible_timer > 0.0:
+		alpha = 0.35 if int(invincible_timer * 16.0) % 2 == 0 else 1.0
+	var tint := Color(1, 1, 1, alpha)
+	var dest := Rect2(Vector2(-56, -64), Vector2(112, 128))
 
-	draw_arc(Vector2.ZERO, attack_range, 0.0, TAU, 96, Color(0.2, 0.65, 1.0, 0.12), 2.0)
-	var aura_level := get_skill_level("aura_ring")
-	if aura_level > 0:
-		var aura_radius := 3.0 * 64.0
-		draw_circle(Vector2.ZERO, aura_radius, Color(0.95, 0.15, 0.35, 0.12))
-		draw_arc(Vector2.ZERO, aura_radius, 0.0, TAU, 96, Color(1.0, 0.2, 0.4, 0.45), 3.0)
+	var tex: Texture2D = _player_texture
+	var flip_h := false
 
-	if _player_texture != null:
-		draw_texture_rect(_player_texture, Rect2(Vector2(-24.0, -24.0), Vector2(48.0, 48.0)), false, body_color.lightened(0.18) if _hit_flash_timer > 0.0 else Color.WHITE)
-	else:
-		draw_circle(Vector2.ZERO, 16.0, body_color)
-		draw_circle(Vector2(5.0, -5.0), 4.0, Color(0.85, 0.95, 1.0))
+	if class_id == "warrior" and _wt_idle != null:
+		match _anim_state:
+			"charge":
+				tex = _wt_charge if _wt_charge != null else _wt_idle
+			"attack":
+				tex = _wt_attack if _wt_attack != null else _wt_idle
+			"cast":
+				tex = _wt_cast if _wt_cast != null else _wt_idle
+			"walk":
+				var dir_key := _get_cardinal_dir(_anim_dir)
+				flip_h = _anim_dir in ["l", "dl", "ul"]  # walk_r 朝右，向左翻轉
+				var frames: Array = _wt_walk.get(dir_key, [])
+				var f: int = _anim_frame % max(1, frames.size())
+				if frames.size() > 0 and frames[f] != null:
+					tex = frames[f]
+				else:
+					tex = _wt_idle
+			_:
+				tex = _wt_idle
 
-	if get_skill_level("lucky_cat") > 0:
-		if _lucky_cat_texture != null:
-			draw_texture_rect(_lucky_cat_texture, Rect2(Vector2(-40.0, 2.0), Vector2(28.0, 28.0)), false)
+	if tex != null:
+		if flip_h:
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2(-1.0, 1.0))
+			draw_texture_rect(tex, dest, false, tint)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
-			draw_circle(Vector2(-24.0, 18.0), 8.0, Color(1.0, 0.72, 0.18))
-			draw_circle(Vector2(-21.0, 16.0), 2.0, Color(0.2, 0.12, 0.05))
+			draw_texture_rect(tex, dest, false, tint)
+	else:
+		draw_circle(Vector2.ZERO, 16.0, Color(0.2, 0.65, 1.0, alpha))
+
+	var range_color: Color = Color(0.2, 0.65, 1.0, 0.14)
+	draw_arc(Vector2.ZERO, get_attack_range(), 0.0, TAU, 96, range_color, 2.0)
+
+
+func _get_cardinal_dir(dir: String) -> String:
+	# warrior_walk 只有 d（正面）與 r（側面），左側由 r + flip_h 處理
+	match dir:
+		"r", "dr", "ur": return "r"
+		"l", "dl", "ul": return "r"   # flip_h = true by caller
+		"u":             return "d"   # 背面用正面代替
+		_:               return "d"

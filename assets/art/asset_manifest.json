@@ -1,61 +1,141 @@
 [
   {
     "category": "角色區",
-    "id": "player_core",
-    "name": "玩家：晶片拾荒者",
+    "id": "char_warrior",
+    "name": "戰士",
     "type": "static",
-    "path": "AIgame_rougelike/assets/art/characters/player/player_core.png",
+    "path": "AIgame_rougelike/assets/art/characters/player/warrior.png",
     "width": 128,
     "height": 128,
     "tags": [
       "player",
-      "角色"
+      "warrior"
     ]
   },
   {
     "category": "角色區",
-    "id": "lucky_cat",
-    "name": "招財貓：資料招財機",
+    "id": "char_archer",
+    "name": "弓手",
     "type": "static",
-    "path": "AIgame_rougelike/assets/art/characters/pets/lucky_cat.png",
-    "width": 96,
-    "height": 96,
+    "path": "AIgame_rougelike/assets/art/characters/player/archer.png",
+    "width": 128,
+    "height": 128,
     "tags": [
-      "pet",
-      "大獎"
+      "player",
+      "archer"
+    ]
+  },
+  {
+    "category": "角色區",
+    "id": "char_mage",
+    "name": "法師",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/characters/player/mage.png",
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "player",
+      "mage"
     ]
   },
   {
     "category": "怪物區",
-    "id": "enemy_normal",
-    "name": "普通怪：紅色感染球",
+    "id": "enemy_retail",
+    "name": "散戶",
     "type": "static",
-    "path": "AIgame_rougelike/assets/art/enemies/normal/red_orb.png",
-    "width": 96,
-    "height": 96,
+    "path": "AIgame_rougelike/assets/art/enemies/retail/retail.png",
+    "width": 128,
+    "height": 128,
     "tags": [
       "enemy",
-      "normal"
+      "lv1"
     ]
   },
   {
     "category": "怪物區",
-    "id": "enemy_elite",
-    "name": "菁英怪：紫色防火牆核心",
+    "id": "enemy_friend",
+    "name": "街友",
     "type": "static",
-    "path": "AIgame_rougelike/assets/art/enemies/elite/purple_firewall.png",
-    "width": 112,
-    "height": 112,
+    "path": "AIgame_rougelike/assets/art/enemies/friend/friend.png",
+    "width": 128,
+    "height": 128,
     "tags": [
       "enemy",
-      "elite",
-      "bullet"
+      "lv2"
+    ]
+  },
+  {
+    "category": "怪物區",
+    "id": "enemy_shooter",
+    "name": "射畜",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/enemies/shooter/shooter.png",
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "enemy",
+      "lv3",
+      "ranged"
+    ]
+  },
+  {
+    "category": "怪物區",
+    "id": "enemy_hoodlum",
+    "name": "89",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/enemies/hoodlum/hoodlum.png",
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "enemy",
+      "lv4",
+      "ranged"
+    ]
+  },
+  {
+    "category": "怪物區",
+    "id": "enemy_aluminum",
+    "name": "鋁布",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/enemies/aluminum/aluminum.png",
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "enemy",
+      "lv5"
+    ]
+  },
+  {
+    "category": "怪物區",
+    "id": "enemy_hacker",
+    "name": "耗客",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/enemies/hacker/hacker.png",
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "enemy",
+      "lv6"
+    ]
+  },
+  {
+    "category": "怪物區",
+    "id": "enemy_patriot",
+    "name": "阻國人",
+    "type": "static",
+    "path": "AIgame_rougelike/assets/art/enemies/patriot/patriot.png",
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "enemy",
+      "lv7",
+      "laser"
     ]
   },
   {
     "category": "怪物區",
     "id": "enemy_headhunter",
-    "name": "獵頭：綠色追獵三角",
+    "name": "獵頭",
     "type": "static",
     "path": "AIgame_rougelike/assets/art/enemies/headhunter/green_triangle.png",
     "width": 128,
@@ -68,7 +148,7 @@
   {
     "category": "怪物區",
     "id": "enemy_boss",
-    "name": "Boss：股災橘色巨核",
+    "name": "Boss",
     "type": "static",
     "path": "AIgame_rougelike/assets/art/enemies/boss/orange_market_crash_core.png",
     "width": 160,
@@ -81,11 +161,11 @@
   {
     "category": "子彈區",
     "id": "bullet_player",
-    "name": "玩家投射物：資料骰子",
+    "name": "玩家子彈",
     "type": "static",
-    "path": "AIgame_rougelike/assets/art/projectiles/player/data_dice.png",
-    "width": 48,
-    "height": 48,
+    "path": "AIgame_rougelike/assets/art/projectiles/player/player_bullet.png",
+    "width": 64,
+    "height": 64,
     "tags": [
       "projectile",
       "player"
@@ -93,200 +173,641 @@
   },
   {
     "category": "子彈區",
-    "id": "bullet_elite",
-    "name": "菁英子彈：紫色封包",
+    "id": "bullet_enemy",
+    "name": "敵人子彈",
     "type": "static",
-    "path": "AIgame_rougelike/assets/art/projectiles/enemy/elite_packet.png",
-    "width": 48,
-    "height": 48,
+    "path": "AIgame_rougelike/assets/art/projectiles/enemy/enemy_bullet.png",
+    "width": 64,
+    "height": 64,
     "tags": [
       "projectile",
-      "elite"
+      "enemy"
     ]
   },
   {
     "category": "子彈區",
     "id": "bullet_boss",
-    "name": "Boss 子彈：橘色崩盤彈",
+    "name": "Boss子彈",
     "type": "static",
     "path": "AIgame_rougelike/assets/art/projectiles/enemy/boss_crash_bullet.png",
-    "width": 56,
-    "height": 56,
+    "width": 64,
+    "height": 64,
     "tags": [
       "projectile",
       "boss"
     ]
   },
   {
-    "category": "掉落物區",
-    "id": "drop_token",
-    "name": "Slot Token 代幣",
-    "type": "static",
-    "path": "AIgame_rougelike/assets/art/drops/token.png",
-    "width": 48,
-    "height": 48,
-    "tags": [
-      "drop",
-      "token"
-    ]
-  },
-  {
-    "category": "掉落物區",
-    "id": "drop_chip",
-    "name": "廢棄晶片",
-    "type": "static",
-    "path": "AIgame_rougelike/assets/art/drops/chip.png",
-    "width": 48,
-    "height": 48,
-    "tags": [
-      "drop",
-      "chip"
-    ]
-  },
-  {
-    "category": "掉落物區",
-    "id": "drop_xp",
-    "name": "經驗值",
-    "type": "static",
-    "path": "AIgame_rougelike/assets/art/drops/xp.png",
-    "width": 48,
-    "height": 48,
-    "tags": [
-      "drop",
-      "xp"
-    ]
-  },
-  {
-    "category": "技能區",
-    "id": "skill_bomb",
-    "name": "炸彈",
-    "type": "static",
-    "path": "AIgame_rougelike/assets/art/skills/bomb.png",
-    "width": 96,
-    "height": 96,
-    "tags": [
-      "skill",
-      "small"
-    ]
-  },
-  {
-    "category": "技能區",
-    "id": "skill_thunder",
-    "name": "落雷",
-    "type": "static",
-    "path": "AIgame_rougelike/assets/art/skills/thunder.png",
-    "width": 96,
-    "height": 96,
-    "tags": [
-      "skill",
-      "small"
-    ]
-  },
-  {
-    "category": "技能區",
-    "id": "skill_frost",
-    "name": "冰霜",
-    "type": "static",
-    "path": "AIgame_rougelike/assets/art/skills/frost_cone.png",
-    "width": 128,
-    "height": 96,
-    "tags": [
-      "skill",
-      "small"
-    ]
-  },
-  {
-    "category": "UI區",
-    "id": "ui_slot_panel",
-    "name": "Slot UI 面板",
-    "type": "static",
-    "path": "AIgame_rougelike/assets/art/ui/slot_panel.png",
-    "width": 320,
-    "height": 180,
-    "tags": [
-      "ui",
-      "slot"
-    ]
-  },
-  {
-    "category": "UI區",
-    "id": "world_slot_machine",
-    "name": "地圖 Slot 機",
-    "type": "static",
-    "path": "AIgame_rougelike/assets/art/ui/slot_machine.png",
-    "width": 96,
-    "height": 128,
-    "tags": [
-      "ui",
-      "slot",
-      "world"
-    ]
-  },
-  {
     "category": "地圖區",
-    "id": "map_tile_grid",
-    "name": "地圖格線：資料荒原地磚",
+    "id": "map_stage_grid",
+    "name": "關卡地圖格線",
     "type": "static",
     "path": "AIgame_rougelike/assets/art/map/data_wasteland_tile.png",
     "width": 128,
     "height": 128,
     "tags": [
       "map",
-      "tile"
+      "stage"
     ]
   },
   {
     "category": "技能區",
-    "id": "skill_aura",
-    "name": "刺環",
+    "id": "skill_dice_01",
+    "name": "骰子：致命骰",
     "type": "sequence",
-    "path": "AIgame_rougelike/assets/art/skills/aura_ring/aura_ring_01.png",
+    "path": "AIgame_rougelike/assets/art/skills/dice/01_01.png",
     "frames": [
-      "AIgame_rougelike/assets/art/skills/aura_ring/aura_ring_01.png",
-      "AIgame_rougelike/assets/art/skills/aura_ring/aura_ring_02.png",
-      "AIgame_rougelike/assets/art/skills/aura_ring/aura_ring_03.png"
+      "AIgame_rougelike/assets/art/skills/dice/01_01.png",
+      "AIgame_rougelike/assets/art/skills/dice/01_02.png",
+      "AIgame_rougelike/assets/art/skills/dice/01_03.png",
+      "AIgame_rougelike/assets/art/skills/dice/01_04.png"
     ],
-    "width": 160,
-    "height": 160,
+    "width": 128,
+    "height": 128,
     "tags": [
       "skill",
-      "jackpot",
+      "骰子",
       "sequence"
     ]
   },
   {
-    "category": "特效區",
-    "id": "effect_dash",
-    "name": "玩家衝刺殘影",
+    "category": "技能區",
+    "id": "skill_dice_02",
+    "name": "骰子：幸運收頭",
     "type": "sequence",
-    "path": "AIgame_rougelike/assets/art/effects/dash/dash_01.png",
+    "path": "AIgame_rougelike/assets/art/skills/dice/02_01.png",
     "frames": [
-      "AIgame_rougelike/assets/art/effects/dash/dash_01.png",
-      "AIgame_rougelike/assets/art/effects/dash/dash_02.png",
-      "AIgame_rougelike/assets/art/effects/dash/dash_03.png"
+      "AIgame_rougelike/assets/art/skills/dice/02_01.png",
+      "AIgame_rougelike/assets/art/skills/dice/02_02.png",
+      "AIgame_rougelike/assets/art/skills/dice/02_03.png",
+      "AIgame_rougelike/assets/art/skills/dice/02_04.png"
     ],
     "width": 128,
-    "height": 64,
+    "height": 128,
     "tags": [
-      "effect",
-      "dash"
+      "skill",
+      "骰子",
+      "sequence"
     ]
   },
   {
-    "category": "特效區",
-    "id": "effect_electric_fence",
-    "name": "藍色電流柵欄",
+    "category": "技能區",
+    "id": "skill_dice_03",
+    "name": "骰子：先手優勢",
     "type": "sequence",
-    "path": "AIgame_rougelike/assets/art/effects/electric_fence/fence_01.png",
+    "path": "AIgame_rougelike/assets/art/skills/dice/03_01.png",
     "frames": [
-      "AIgame_rougelike/assets/art/effects/electric_fence/fence_01.png",
-      "AIgame_rougelike/assets/art/effects/electric_fence/fence_02.png"
+      "AIgame_rougelike/assets/art/skills/dice/03_01.png",
+      "AIgame_rougelike/assets/art/skills/dice/03_02.png",
+      "AIgame_rougelike/assets/art/skills/dice/03_03.png",
+      "AIgame_rougelike/assets/art/skills/dice/03_04.png"
     ],
-    "width": 192,
-    "height": 48,
+    "width": 128,
+    "height": 128,
     "tags": [
-      "effect",
-      "fence"
+      "skill",
+      "骰子",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_dice_04",
+    "name": "骰子：爆裂骰",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/dice/04_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/dice/04_01.png",
+      "AIgame_rougelike/assets/art/skills/dice/04_02.png",
+      "AIgame_rougelike/assets/art/skills/dice/04_03.png",
+      "AIgame_rougelike/assets/art/skills/dice/04_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "骰子",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_dice_05",
+    "name": "骰子：孤注一擲",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/dice/05_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/dice/05_01.png",
+      "AIgame_rougelike/assets/art/skills/dice/05_02.png",
+      "AIgame_rougelike/assets/art/skills/dice/05_03.png",
+      "AIgame_rougelike/assets/art/skills/dice/05_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "骰子",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_dice_06",
+    "name": "骰子：賭徒熱手",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/dice/06_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/dice/06_01.png",
+      "AIgame_rougelike/assets/art/skills/dice/06_02.png",
+      "AIgame_rougelike/assets/art/skills/dice/06_03.png",
+      "AIgame_rougelike/assets/art/skills/dice/06_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "骰子",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_tech_01",
+    "name": "科技：冷卻",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/tech/01_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/tech/01_01.png",
+      "AIgame_rougelike/assets/art/skills/tech/01_02.png",
+      "AIgame_rougelike/assets/art/skills/tech/01_03.png",
+      "AIgame_rougelike/assets/art/skills/tech/01_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "科技",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_tech_02",
+    "name": "科技：過載",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/tech/02_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/tech/02_01.png",
+      "AIgame_rougelike/assets/art/skills/tech/02_02.png",
+      "AIgame_rougelike/assets/art/skills/tech/02_03.png",
+      "AIgame_rougelike/assets/art/skills/tech/02_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "科技",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_tech_03",
+    "name": "科技：病毒",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/tech/03_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/tech/03_01.png",
+      "AIgame_rougelike/assets/art/skills/tech/03_02.png",
+      "AIgame_rougelike/assets/art/skills/tech/03_03.png",
+      "AIgame_rougelike/assets/art/skills/tech/03_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "科技",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_tech_04",
+    "name": "科技：高壓電",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/tech/04_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/tech/04_01.png",
+      "AIgame_rougelike/assets/art/skills/tech/04_02.png",
+      "AIgame_rougelike/assets/art/skills/tech/04_03.png",
+      "AIgame_rougelike/assets/art/skills/tech/04_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "科技",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_tech_05",
+    "name": "科技：熔毀",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/tech/05_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/tech/05_01.png",
+      "AIgame_rougelike/assets/art/skills/tech/05_02.png",
+      "AIgame_rougelike/assets/art/skills/tech/05_03.png",
+      "AIgame_rougelike/assets/art/skills/tech/05_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "科技",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_tech_06",
+    "name": "科技：磁暴",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/tech/06_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/tech/06_01.png",
+      "AIgame_rougelike/assets/art/skills/tech/06_02.png",
+      "AIgame_rougelike/assets/art/skills/tech/06_03.png",
+      "AIgame_rougelike/assets/art/skills/tech/06_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "科技",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_poker_01",
+    "name": "樸克：命運紅心",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/poker/01_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/poker/01_01.png",
+      "AIgame_rougelike/assets/art/skills/poker/01_02.png",
+      "AIgame_rougelike/assets/art/skills/poker/01_03.png",
+      "AIgame_rougelike/assets/art/skills/poker/01_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "樸克",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_poker_02",
+    "name": "樸克：致命黑桃",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/poker/02_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/poker/02_01.png",
+      "AIgame_rougelike/assets/art/skills/poker/02_02.png",
+      "AIgame_rougelike/assets/art/skills/poker/02_03.png",
+      "AIgame_rougelike/assets/art/skills/poker/02_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "樸克",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_poker_03",
+    "name": "樸克：鑽石爆擊",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/poker/03_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/poker/03_01.png",
+      "AIgame_rougelike/assets/art/skills/poker/03_02.png",
+      "AIgame_rougelike/assets/art/skills/poker/03_03.png",
+      "AIgame_rougelike/assets/art/skills/poker/03_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "樸克",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_poker_04",
+    "name": "樸克：疾風梅花",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/poker/04_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/poker/04_01.png",
+      "AIgame_rougelike/assets/art/skills/poker/04_02.png",
+      "AIgame_rougelike/assets/art/skills/poker/04_03.png",
+      "AIgame_rougelike/assets/art/skills/poker/04_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "樸克",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_poker_05",
+    "name": "樸克：厄運小丑",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/poker/05_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/poker/05_01.png",
+      "AIgame_rougelike/assets/art/skills/poker/05_02.png",
+      "AIgame_rougelike/assets/art/skills/poker/05_03.png",
+      "AIgame_rougelike/assets/art/skills/poker/05_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "樸克",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_poker_06",
+    "name": "樸克：皇家護衛",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/poker/06_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/poker/06_01.png",
+      "AIgame_rougelike/assets/art/skills/poker/06_02.png",
+      "AIgame_rougelike/assets/art/skills/poker/06_03.png",
+      "AIgame_rougelike/assets/art/skills/poker/06_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "樸克",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_mahjong_01",
+    "name": "麻將：大三元",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/mahjong/01_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/mahjong/01_01.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/01_02.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/01_03.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/01_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "麻將",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_mahjong_02",
+    "name": "麻將：大四喜",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/mahjong/02_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/mahjong/02_01.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/02_02.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/02_03.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/02_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "麻將",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_mahjong_03",
+    "name": "麻將：碰碰胡",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/mahjong/03_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/mahjong/03_01.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/03_02.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/03_03.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/03_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "麻將",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_mahjong_04",
+    "name": "麻將：海底撈月",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/mahjong/04_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/mahjong/04_01.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/04_02.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/04_03.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/04_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "麻將",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_mahjong_05",
+    "name": "麻將：門清",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/mahjong/05_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/mahjong/05_01.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/05_02.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/05_03.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/05_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "麻將",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_mahjong_06",
+    "name": "麻將：清一色",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/mahjong/06_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/mahjong/06_01.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/06_02.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/06_03.png",
+      "AIgame_rougelike/assets/art/skills/mahjong/06_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "麻將",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_fish_01",
+    "name": "魚機：連射砲",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/fish/01_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/fish/01_01.png",
+      "AIgame_rougelike/assets/art/skills/fish/01_02.png",
+      "AIgame_rougelike/assets/art/skills/fish/01_03.png",
+      "AIgame_rougelike/assets/art/skills/fish/01_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "魚機",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_fish_02",
+    "name": "魚機：火焰砲",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/fish/02_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/fish/02_01.png",
+      "AIgame_rougelike/assets/art/skills/fish/02_02.png",
+      "AIgame_rougelike/assets/art/skills/fish/02_03.png",
+      "AIgame_rougelike/assets/art/skills/fish/02_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "魚機",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_fish_03",
+    "name": "魚機：鋸齒砲",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/fish/03_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/fish/03_01.png",
+      "AIgame_rougelike/assets/art/skills/fish/03_02.png",
+      "AIgame_rougelike/assets/art/skills/fish/03_03.png",
+      "AIgame_rougelike/assets/art/skills/fish/03_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "魚機",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_fish_04",
+    "name": "魚機：導彈砲",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/fish/04_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/fish/04_01.png",
+      "AIgame_rougelike/assets/art/skills/fish/04_02.png",
+      "AIgame_rougelike/assets/art/skills/fish/04_03.png",
+      "AIgame_rougelike/assets/art/skills/fish/04_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "魚機",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_fish_05",
+    "name": "魚機：雷射砲",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/fish/05_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/fish/05_01.png",
+      "AIgame_rougelike/assets/art/skills/fish/05_02.png",
+      "AIgame_rougelike/assets/art/skills/fish/05_03.png",
+      "AIgame_rougelike/assets/art/skills/fish/05_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "魚機",
+      "sequence"
+    ]
+  },
+  {
+    "category": "技能區",
+    "id": "skill_fish_06",
+    "name": "魚機：連鎖砲",
+    "type": "sequence",
+    "path": "AIgame_rougelike/assets/art/skills/fish/06_01.png",
+    "frames": [
+      "AIgame_rougelike/assets/art/skills/fish/06_01.png",
+      "AIgame_rougelike/assets/art/skills/fish/06_02.png",
+      "AIgame_rougelike/assets/art/skills/fish/06_03.png",
+      "AIgame_rougelike/assets/art/skills/fish/06_04.png"
+    ],
+    "width": 128,
+    "height": 128,
+    "tags": [
+      "skill",
+      "魚機",
+      "sequence"
     ]
   }
 ]

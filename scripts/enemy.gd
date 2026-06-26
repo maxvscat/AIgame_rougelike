@@ -1,392 +1,521 @@
 extends CharacterBody2D
 
-signal damaged(enemy_kind: String, damage_amount: int)
-signal died(enemy_position: Vector2, xp_value: int, enemy_kind: String)
-signal special_requested(enemy: Node2D, skill_id: String, target_position: Vector2)
+signal died(enemy: Node2D)
+signal attack_projectile_requested(origin: Vector2, target_position: Vector2, speed: float)
+signal dot_damage_occurred(pos: Vector2, amount: float)
 
 const TILE_SIZE := 64.0
-const HEADHUNTER_BODY_RADIUS := 21.0
-const HEADHUNTER_DASH_DISTANCE := TILE_SIZE * 9.0
-const HEADHUNTER_DASH_WIDTH := HEADHUNTER_BODY_RADIUS * 6.0
-const HEADHUNTER_DASH_SPEED_MULTIPLIER := 4.0
-const HEADHUNTER_SWEEP_RADIUS := TILE_SIZE * 5.0
-const HEADHUNTER_SWEEP_PREPARE_TIME := 1.5
-const BOSS_BODY_RADIUS := 32.0
-const BOSS_CHARGE_DISTANCE := TILE_SIZE * 14.0
-const BOSS_CHARGE_WIDTH := BOSS_BODY_RADIUS * 6.0
-const BOSS_CHARGE_SPEED_MULTIPLIER := 5.0
-
-@onready var chinese_font = load("res://AIgame_rougelike/assets/fonts/NotoSansCJKtc-Regular.otf")
-@onready var normal_texture: Texture2D = load("res://AIgame_rougelike/assets/art/enemies/normal/red_orb.png")
-@onready var elite_texture: Texture2D = load("res://AIgame_rougelike/assets/art/enemies/elite/purple_firewall.png")
-@onready var headhunter_texture: Texture2D = load("res://AIgame_rougelike/assets/art/enemies/headhunter/green_triangle.png")
-@onready var boss_texture: Texture2D = load("res://AIgame_rougelike/assets/art/enemies/boss/orange_market_crash_core.png")
-@export var speed := 112.5
-@export var max_health := 48
-@export var touch_damage := 11
-@export var contact_cooldown := 1.0
-@export var contact_distance := 46.0
-@export var separation_distance := 42.0
-@export var separation_push_speed := 70.0
-@export var xp_value := 8
 
 var target: Node2D
-var enemy_kind := "normal"
-var health := 48
-var _contact_timer := 0.0
+var enemy_id := "retail"
+var display_name := "散戶"
+var max_health := 4.0
+var health := 4.0
+var move_speed := 82.0
+var attack_type := "melee"
+var attack_range_tiles := 1.0
+var attacks_per_second := 0.25
+var contact_radius := 28.0
+var scale_multiplier := 1.0
+var skill_id := ""
+var skill_cd := 0.0
+var skill_timer := 0.0
+var active := true
+
+var _attack_timer := 0.0
 var _hit_flash_timer := 0.0
-var _headhunter_state := "chase"
-var _headhunter_timer := 0.0
-var _headhunter_dash_direction := Vector2.ZERO
-var _headhunter_dash_hit := false
-var _headhunter_dash_start := Vector2.ZERO
-var _headhunter_dash_end := Vector2.ZERO
-var _headhunter_warning_clear_timer := -1.0
-var _headhunter_warning_line: Line2D
-var _headhunter_sweep_ring: Line2D
-var _headhunter_sweep_flash: Line2D
-var _boss_charge_timer := 7.0
-var _boss_summon_timer := 10.0
-var _boss_crash_timer := 15.0
-var _boss_scan_timer := 7.0
-var _boss_bullet_timer := 0.3
-var _boss_bullets_left := 50
-var _boss_reload_timer := 0.0
-var _elite_bullet_timer := randf_range(6.0, 10.0)
-var _boss_state := "chase"
-var _boss_state_timer := 0.0
-var _boss_dash_direction := Vector2.ZERO
-var _boss_dash_hit := false
-var _boss_dash_start := Vector2.ZERO
-var _boss_dash_end := Vector2.ZERO
-var _skill_label_timer := 0.0
-var _skill_label_text := ""
 var _slow_timer := 0.0
 var _slow_multiplier := 1.0
-var _spawn_inactive_timer := 0.0
+var _burn_ticks := []
+var _poison_ticks := []
+var _jump_state := "chase"     # "chase" | "prepare" | "landing"（耗客跳砍用）
+var _jump_timer := 0.0
+var _jump_target := Vector2.ZERO
+var _warning_node: Node2D
+var _texture: Texture2D
+var _font: Font
+
+# ── 近戰攻擊狀態機 ──────────────────────────────────────────────────────────
+# chase → charge → lunge → recovery → chase
+var _ma_state := "chase"
+var _ma_timer := 0.0
+var _ma_attack_dir := Vector2.ZERO   # 集氣時鎖定的攻擊方向（世界空間）
+var _ma_lunge_end := Vector2.ZERO    # 衝刺終點（世界空間）
+var _ma_hit_done := false            # 本次衝刺是否已判定傷害
+
+# 近戰攻擊參數（由 _setup_melee_params() 依怪物設定）
+var _ma_charge_time   := 0.6    # 集氣時間（秒）
+var _ma_range_tiles   := 1.2    # 攻擊到達距離（格）── 判定範圍
+var _ma_width_tiles   := 0.8    # 矩形攻擊寬度（格）── 僅 rect 使用
+var _ma_lunge_tiles   := 1.0    # 衝刺前進距離（格）
+var _ma_recovery_time := 0.4    # 攻擊後硬直（秒）
+var _ma_shape         := "rect" # 攻擊形狀："rect" | "fan" | "circle"
+var _ma_fan_angle     := 120.0  # 扇形角度（度）── 僅 fan 使用
+
+# 技能集氣（鋁布橫掃 / 其他需要蓄力的技能）
+var _skill_charging := false
+var _skill_charge_timer := 0.0
+var _skill_charge_max := 1.5
+var _skill_charge_callback := Callable()
 
 
 func _ready() -> void:
 	add_to_group("enemies")
+	_font = load("res://AIgame_rougelike/assets/fonts/MaokenAssortedSans-TC.otf") if ResourceLoader.exists("res://AIgame_rougelike/assets/fonts/MaokenAssortedSans-TC.otf") else load("res://AIgame_rougelike/assets/fonts/NotoSansCJKtc-Regular.otf")
+	_load_texture()
 	health = max_health
+	skill_timer = randf_range(1.0, max(1.2, skill_cd))
+
+
+func setup(def: Dictionary, player: Node2D, power_multiplier := 1.0) -> void:
+	target = player
+	enemy_id    = str(def.get("id",          "retail"))
+	display_name= str(def.get("name",        "敵人"))
+	max_health  = float(def.get("hp",  4.0)) * power_multiplier
+	health      = max_health
+	move_speed  = float(def.get("speed", 82.0))
+	attack_type = str(def.get("attack_type", "melee"))
+	attack_range_tiles = float(def.get("range", 1.0))
+	attacks_per_second = float(def.get("aps",   0.25))
+	skill_id    = str(def.get("skill",    ""))
+	skill_cd    = float(def.get("skill_cd", 0.0))
+	scale_multiplier = float(def.get("scale", 1.0))
+	contact_radius   = 18.0 * scale_multiplier
+	# 動態更新 CollisionShape2D 半徑
+	var _col := get_node_or_null("CollisionShape2D")
+	if _col != null and _col.shape is CircleShape2D:
+		_col.shape.radius = 10.5 * scale_multiplier
+	_setup_melee_params()
+	_load_texture()
+	queue_redraw()
+
+
+func _setup_melee_params() -> void:
+	# 根據 enemy_id 設定各近戰怪的攻擊參數
+	match enemy_id:
+		"retail":
+			_ma_charge_time   = 0.6
+			_ma_range_tiles   = 1.2
+			_ma_width_tiles   = 0.8
+			_ma_lunge_tiles   = 1.0
+			_ma_recovery_time = 0.4
+			_ma_shape         = "rect"
+		"friend":
+			_ma_charge_time   = 0.5
+			_ma_range_tiles   = 1.4
+			_ma_width_tiles   = 0.9
+			_ma_lunge_tiles   = 2.0
+			_ma_recovery_time = 0.3
+			_ma_shape         = "rect"
+		"aluminum":
+			_ma_charge_time   = 0.8
+			_ma_range_tiles   = 2.0
+			_ma_width_tiles   = 2.0   # fan 不用 width，但保留備用
+			_ma_lunge_tiles   = 5.0
+			_ma_recovery_time = 0.5
+			_ma_shape         = "fan"
+			_ma_fan_angle     = 120.0
+		"hacker":
+			_ma_charge_time   = 0.45
+			_ma_range_tiles   = 1.3
+			_ma_width_tiles   = 0.8
+			_ma_lunge_tiles   = 3.0
+			_ma_recovery_time = 0.3
+			_ma_shape         = "rect"
+		"patriot":
+			_ma_charge_time   = 0.7
+			_ma_range_tiles   = 5.0
+			_ma_width_tiles   = 1.5
+			_ma_lunge_tiles   = 8.0
+			_ma_recovery_time = 0.5
+			_ma_shape         = "rect"
+		"headhunter":
+			_ma_charge_time   = 0.5
+			_ma_range_tiles   = 1.5
+			_ma_width_tiles   = 1.0
+			_ma_lunge_tiles   = 3.0
+			_ma_recovery_time = 0.4
+			_ma_shape         = "rect"
+		_:
+			_ma_charge_time   = 0.6
+			_ma_range_tiles   = 1.2
+			_ma_width_tiles   = 0.8
+			_ma_lunge_tiles   = 1.0
+			_ma_recovery_time = 0.4
+			_ma_shape         = "rect"
 
 
 func _physics_process(delta: float) -> void:
-	if not is_instance_valid(target) or health <= 0:
+	if not active or not is_instance_valid(target) or health <= 0.0:
 		return
-	if _spawn_inactive_timer > 0.0:
-		_spawn_inactive_timer -= delta
-		if _spawn_inactive_timer <= 0.0:
-			modulate.a = 1.0
-		return
-
-	if enemy_kind == "headhunter":
-		_process_headhunter(delta)
-	elif enemy_kind == "boss":
-		_process_boss(delta)
+	_process_status(delta)
+	if _jump_state != "chase":
+		_process_jump(delta)
 	else:
-		_process_chase(delta)
-		if enemy_kind == "elite":
-			_process_elite_bullet(delta)
+		# 技能集氣（鋁布橫掃等）
+		if _skill_charging:
+			_skill_charge_timer += delta
+			queue_redraw()
+			if _skill_charge_timer >= _skill_charge_max and _skill_charge_callback.is_valid():
+				_skill_charge_callback.call()
+		_process_movement_and_attack(delta)
+		if not _skill_charging:
+			_process_skill(delta)
+	if _hit_flash_timer > 0.0:
+		_hit_flash_timer -= delta
+		queue_redraw()
 
+
+func _process_movement_and_attack(delta: float) -> void:
+	if not is_instance_valid(target):
+		return
+	var to_target := target.global_position - global_position
+	var distance  := to_target.length()
+	var direction := to_target.normalized() if distance > 0.001 else Vector2.RIGHT
+
+	# ── 遠程怪：移動 + 射擊，無接觸傷害 ──────────────────────────
+	if attack_type == "ranged":
+		var attack_range := attack_range_tiles * TILE_SIZE
+		if distance > max(attack_range * 0.86, contact_radius + 12.0):
+			velocity = direction * move_speed * _slow_multiplier
+		else:
+			velocity = Vector2.ZERO
+		move_and_slide()
+		_attack_timer = max(_attack_timer - delta, 0.0)
+		if distance <= attack_range and _attack_timer <= 0.0:
+			_attack_timer = 1.0 / max(0.05, attacks_per_second)
+			attack_projectile_requested.emit(global_position, target.global_position, move_speed * 1.95)
+		return
+
+	# ── 近戰狀態機 chase → charge → lunge → recovery ──────────────
+	# 觸發集氣距離 = (衝刺格 + 攻擊格) × TILE_SIZE × 0.9
+	var trigger_dist := (_ma_lunge_tiles + _ma_range_tiles) * TILE_SIZE * 0.9
+
+	match _ma_state:
+		"chase":
+			if _skill_charging:
+				velocity = Vector2.ZERO
+				move_and_slide()
+				return
+			# 追蹤玩家
+			if distance > max(trigger_dist * 0.85, contact_radius + 8.0):
+				velocity = direction * move_speed * _slow_multiplier
+			else:
+				velocity = Vector2.ZERO
+			# 反黏附：距離過近時往外推，避免黏在玩家身上
+			var repel_dist: float = contact_radius * 1.4
+			if distance < repel_dist and distance > 0.5:
+				var away: Vector2 = (global_position - target.global_position).normalized()
+				velocity += away * move_speed * 0.5 * (1.0 - distance / repel_dist)
+			move_and_slide()
+			# 玩家進入觸發距離 → 開始集氣
+			if distance <= trigger_dist and not _skill_charging:
+				_ma_state     = "charge"
+				_ma_timer     = 0.0
+				_ma_attack_dir = direction   # 鎖定方向
+				velocity      = Vector2.ZERO
+				queue_redraw()
+
+		"charge":
+			# 原地集氣，面向鎖定方向，顯示攻擊預警
+			velocity = Vector2.ZERO
+			move_and_slide()
+			_ma_timer += delta
+			queue_redraw()
+			if _ma_timer >= _ma_charge_time:
+				_start_melee_lunge()
+
+		"lunge":
+			# 快速衝向鎖定終點
+			var remaining   := _ma_lunge_end - global_position
+			var lunge_speed := 800.0
+			if remaining.length() <= lunge_speed * delta:
+				global_position = _ma_lunge_end
+				# 衝刺到位：判定是否擊中
+				if not _ma_hit_done and _check_melee_hit():
+					_ma_hit_done = true
+					if is_instance_valid(target):
+						target.take_damage(1)
+				_ma_state = "recovery"
+				_ma_timer = 0.0
+				velocity  = Vector2.ZERO
+			else:
+				velocity = remaining.normalized() * lunge_speed
+			move_and_slide()
+			queue_redraw()
+
+		"recovery":
+			# 攻擊後硬直：同樣加反黏附
+			var rdist: float = global_position.distance_to(target.global_position)
+			var rrepel: float = contact_radius * 1.2
+			if rdist < rrepel and rdist > 0.5:
+				var raway: Vector2 = (global_position - target.global_position).normalized()
+				velocity = raway * move_speed * 0.3
+			else:
+				velocity = Vector2.ZERO
+			move_and_slide()
+			_ma_timer += delta
+			if _ma_timer >= _ma_recovery_time:
+				_ma_state = "chase"
+			queue_redraw()
+
+
+func _start_melee_lunge() -> void:
+	_ma_state    = "lunge"
+	_ma_lunge_end = global_position + _ma_attack_dir * _ma_lunge_tiles * TILE_SIZE
+	_ma_timer    = 0.0
+	_ma_hit_done = false
+	queue_redraw()
+
+
+func _check_melee_hit() -> bool:
+	# 判定玩家是否在攻擊形狀範圍內（以衝刺終點為基準）
+	if not is_instance_valid(target):
+		return false
+	var rel      := target.global_position - global_position
+	var range_px := _ma_range_tiles * TILE_SIZE
+	var width_px := _ma_width_tiles * TILE_SIZE
+	match _ma_shape:
+		"rect":
+			var fwd  := rel.dot(_ma_attack_dir)
+			var perp: float = absf(rel.dot(_ma_attack_dir.rotated(PI * 0.5)))
+			# 往後 16px 容忍（玩家剛好貼著怪時仍能判中）
+			return fwd >= -16.0 and fwd <= range_px and perp <= width_px * 0.5
+		"fan":
+			if rel.length() > range_px:
+				return false
+			if rel.length() < 0.001:
+				return true
+			return abs(_ma_attack_dir.angle_to(rel.normalized())) <= deg_to_rad(_ma_fan_angle * 0.5)
+		"circle":
+			return rel.length() <= range_px
+	return false
+
+
+func apply_knockback(direction: Vector2, distance: float) -> void:
+	# 被擊退打斷集氣 / 衝刺
+	if _ma_state == "charge" or _ma_state == "lunge":
+		_ma_state = "chase"
+		_ma_timer = 0.0
+	global_position += direction.normalized() * distance
+
+
+func _process_skill(delta: float) -> void:
+	if skill_id.is_empty() or skill_cd <= 0.0:
+		return
+	skill_timer -= delta
+	if skill_timer > 0.0:
+		return
+	skill_timer = skill_cd
+	match skill_id:
+		"speed_burst":
+			_speed_burst()
+		"summon_retail":
+			get_parent().call_deferred("_spawn_wave_enemy", "retail",
+				global_position + Vector2(randf_range(-48.0, 48.0), randf_range(-48.0, 48.0)))
+			get_parent().call_deferred("_spawn_wave_enemy", "retail",
+				global_position + Vector2(randf_range(-48.0, 48.0), randf_range(-48.0, 48.0)))
+		"sweep":
+			_sweep_attack()
+		"jump_slash":
+			_start_jump_slash()
+		"laser":
+			_fire_random_lasers()
+
+
+func _speed_burst() -> void:
+	# 街友：移動速度 +100%，持續 2 秒
+	var old_speed := move_speed
+	move_speed *= 2.0
+	var tween := create_tween()
+	tween.tween_interval(2.0)
+	tween.tween_callback(func() -> void:
+		move_speed = old_speed
+	)
+
+
+func _sweep_attack() -> void:
+	# 鋁布橫掃一圈技能：0.8 秒預警圓 → 對 2 格範圍造成傷害
+	_skill_charging     = true
+	_skill_charge_timer = 0.0
+	_skill_charge_max   = 0.8
+	_skill_charge_callback = func() -> void:
+		_skill_charging     = false
+		_skill_charge_timer = 0.0
+		_skill_charge_callback = Callable()
+		_spawn_circle_warning(global_position, 2.0 * TILE_SIZE,
+			Color(1.0, 0.2, 0.2, 0.5), 0.2,
+			func() -> void:
+				if is_instance_valid(target) and \
+						global_position.distance_to(target.global_position) <= 2.0 * TILE_SIZE:
+					target.take_damage(1)
+		)
+		queue_redraw()
+
+
+func _start_jump_slash() -> void:
+	# 耗客跳砍技能
+	# 觸發條件：玩家 5 格內；同時最多 4 隻進行跳砍
+	if not is_instance_valid(target):
+		return
+	if global_position.distance_to(target.global_position) > 5.0 * TILE_SIZE:
+		return
+	if get_tree().get_nodes_in_group("jumping_enemies").size() >= 4:
+		return
+	add_to_group("jumping_enemies")
+	# 中斷普攻
+	_ma_state = "chase"
+	_ma_timer = 0.0
+	_jump_state = "prepare"
+	_jump_timer = 2.0
+	# 鎖定玩家當下位置的隨機 2 格範圍
+	var angle := randf_range(0.0, TAU)
+	var dist  := randf_range(0.0, 2.0) * TILE_SIZE
+	_jump_target = target.global_position + Vector2(cos(angle), sin(angle)) * dist
+	_spawn_circle_warning(_jump_target, 2.0 * TILE_SIZE,
+		Color(1.0, 0.1, 0.1, 0.5), 2.0, func() -> void: pass)
+
+
+func _process_jump(delta: float) -> void:
+	if _jump_state == "prepare":
+		velocity = Vector2.ZERO
+		move_and_slide()
+		_jump_timer -= delta
+		if _jump_timer <= 0.0:
+			_jump_state = "landing"
+			_jump_timer = 0.2
+			global_position = _jump_target
+			if is_instance_valid(target) and \
+					global_position.distance_to(target.global_position) <= 2.0 * TILE_SIZE:
+				target.take_damage(1)
+	elif _jump_state == "landing":
+		_jump_timer -= delta
+		if _jump_timer <= 0.0:
+			remove_from_group("jumping_enemies")
+			_jump_state = "chase"
+
+
+func _fire_random_lasers() -> void:
+	for _i in range(2):
+		var angle := randf_range(0.0, TAU)
+		var start := global_position
+		var end   := start + Vector2.RIGHT.rotated(angle) * 16.0 * TILE_SIZE
+		_spawn_line_warning(start, end, 34.0, Color(1.0, 0.05, 0.05, 0.5), 1.0,
+			func() -> void:
+				if is_instance_valid(target) and \
+						_distance_to_segment(target.global_position, start, end) <= 34.0:
+					target.take_damage(1)
+		)
+
+
+func _process_status(delta: float) -> void:
 	if _slow_timer > 0.0:
 		_slow_timer -= delta
 		if _slow_timer <= 0.0:
 			_slow_multiplier = 1.0
-	if _headhunter_warning_clear_timer > 0.0:
-		_headhunter_warning_clear_timer -= delta
-		if _headhunter_warning_clear_timer <= 0.0:
-			_clear_headhunter_warning_line()
-
-	if _hit_flash_timer > 0.0:
-		_hit_flash_timer -= delta
-		queue_redraw()
-	if _skill_label_timer > 0.0:
-		_skill_label_timer -= delta
-		queue_redraw()
-
-
-func _process_chase(delta: float) -> void:
-	var to_target := target.global_position - global_position
-	var distance := to_target.length()
-	var direction := to_target.normalized() if distance > 0.001 else Vector2.ZERO
-	if distance > contact_distance:
-		velocity = direction * _current_speed()
-	elif distance < separation_distance:
-		velocity = -direction * separation_push_speed
-	else:
-		velocity = Vector2.ZERO
-	move_and_slide()
-
-	_contact_timer = max(_contact_timer - delta, 0.0)
-	if distance <= contact_distance and _contact_timer <= 0.0:
-		if target.has_method("take_damage"):
-			target.take_damage(touch_damage)
-		_contact_timer = contact_cooldown
+	for index in range(_burn_ticks.size() - 1, -1, -1):
+		var tick: Dictionary = _burn_ticks[index]
+		tick["timer"] = float(tick["timer"]) - delta
+		tick["tick"]  = float(tick["tick"])  - delta
+		if float(tick["tick"]) <= 0.0:
+			tick["tick"] = 1.0
+			var burn_amount := float(tick["damage"])
+			take_damage(burn_amount)
+			dot_damage_occurred.emit(global_position, burn_amount)
+		if float(tick["timer"]) <= 0.0:
+			_burn_ticks.remove_at(index)
+		else:
+			_burn_ticks[index] = tick
+	for index in range(_poison_ticks.size() - 1, -1, -1):
+		var tick: Dictionary = _poison_ticks[index]
+		tick["timer"] = float(tick["timer"]) - delta
+		tick["tick"]  = float(tick["tick"])  - delta
+		if float(tick["tick"]) <= 0.0:
+			tick["tick"] = 1.0
+			var poison_amount := float(tick["damage"])
+			take_damage(poison_amount)
+			dot_damage_occurred.emit(global_position, poison_amount)
+		if float(tick["timer"]) <= 0.0:
+			_poison_ticks.remove_at(index)
+		else:
+			_poison_ticks[index] = tick
 
 
-func _process_headhunter(delta: float) -> void:
-	var to_target := target.global_position - global_position
-	var distance := to_target.length()
-	var direction := to_target.normalized() if distance > 0.001 else Vector2.RIGHT
-	var lock_distance := 3.0 * TILE_SIZE
-	match _headhunter_state:
-		"chase":
-			if distance > lock_distance:
-				velocity = direction * _current_speed()
-				move_and_slide()
-			else:
-				_start_headhunter_dash_lock(direction)
-		"lock":
-			velocity = Vector2.ZERO
-			_headhunter_timer -= delta
-			if _headhunter_timer <= 0.0:
-				_headhunter_state = "dash"
-				_headhunter_timer = HEADHUNTER_DASH_DISTANCE / max(1.0, _current_speed() * HEADHUNTER_DASH_SPEED_MULTIPLIER)
-				_headhunter_warning_clear_timer = 1.0
-		"dash":
-			velocity = Vector2.ZERO
-			global_position = global_position.move_toward(_headhunter_dash_end, _current_speed() * HEADHUNTER_DASH_SPEED_MULTIPLIER * delta)
-			_try_path_hit(touch_damage, _headhunter_dash_start, _headhunter_dash_end, HEADHUNTER_DASH_WIDTH, "_headhunter_dash_hit")
-			_headhunter_timer -= delta
-			if _headhunter_timer <= 0.0 or global_position.distance_to(_headhunter_dash_end) <= 4.0:
-				velocity = Vector2.ZERO
-				_start_headhunter_sweep()
-		"sweep_prepare":
-			velocity = Vector2.ZERO
-			_headhunter_timer -= delta
-			if _headhunter_timer <= 0.0:
-				_finish_headhunter_sweep()
-				_headhunter_state = "recover"
-				_headhunter_timer = 1.0
-		"recover":
-			velocity = Vector2.ZERO
-			_headhunter_timer -= delta
-			if _headhunter_timer <= 0.0:
-				_headhunter_state = "chase"
-
-
-func _process_boss(delta: float) -> void:
-	_process_boss_timers(delta)
-	match _boss_state:
-		"charge_prepare":
-			velocity = Vector2.ZERO
-			_boss_state_timer -= delta
-			if _boss_state_timer <= 0.0:
-				_boss_state = "charge"
-				_boss_state_timer = BOSS_CHARGE_DISTANCE / max(1.0, _current_speed() * BOSS_CHARGE_SPEED_MULTIPLIER)
-				_boss_dash_hit = false
-		"charge":
-			velocity = Vector2.ZERO
-			global_position = global_position.move_toward(_boss_dash_end, _current_speed() * BOSS_CHARGE_SPEED_MULTIPLIER * delta)
-			_try_path_hit(max(1, int(round(float(touch_damage) * 0.5))), _boss_dash_start, _boss_dash_end, BOSS_CHARGE_WIDTH, "_boss_dash_hit", true)
-			_boss_state_timer -= delta
-			if _boss_state_timer <= 0.0 or global_position.distance_to(_boss_dash_end) <= 4.0:
-				_boss_state = "recover"
-				_boss_state_timer = 0.7
-				velocity = Vector2.ZERO
-		"recover":
-			velocity = Vector2.ZERO
-			_boss_state_timer -= delta
-			if _boss_state_timer <= 0.0:
-				_boss_state = "chase"
-		_:
-			_process_chase(delta)
-
-
-func _process_boss_timers(delta: float) -> void:
-	_boss_charge_timer -= delta
-	_boss_summon_timer -= delta
-	_boss_crash_timer -= delta
-	_boss_scan_timer -= delta
-	_process_boss_bullets(delta)
-	if _boss_charge_timer <= 0.0:
-		_boss_charge_timer = 7.0
-		_start_boss_charge()
-	if _boss_summon_timer <= 0.0:
-		_boss_summon_timer = 10.0
-		_show_skill_label("召喚AI大軍")
-		special_requested.emit(self, "summon_ai", global_position)
-	if _boss_crash_timer <= 0.0:
-		_boss_crash_timer = 15.0
-		_show_skill_label("股災")
-		special_requested.emit(self, "stock_crash", target.global_position)
-	if _boss_scan_timer <= 0.0:
-		_boss_scan_timer = 7.0
-		_show_skill_label("掃瞄")
-		special_requested.emit(self, "scan_laser", target.global_position)
-
-
-func _start_boss_charge() -> void:
-	if not is_instance_valid(target):
+func take_damage(amount: float) -> void:
+	if health <= 0.0:
 		return
-	_show_skill_label("衝鋒")
-	var to_target := target.global_position - global_position
-	_boss_dash_direction = to_target.normalized() if to_target.length() > 0.001 else Vector2.RIGHT
-	_boss_dash_start = global_position
-	_boss_dash_end = _boss_dash_start + _boss_dash_direction * BOSS_CHARGE_DISTANCE
-	_boss_state = "charge_prepare"
-	_boss_state_timer = 0.8
-	_boss_dash_hit = false
-	special_requested.emit(self, "charge_line", target.global_position)
+	health -= amount
+	_hit_flash_timer = 0.08
+	queue_redraw()
+	if health <= 0.0:
+		died.emit(self)
+		queue_free()
 
 
-func _process_boss_bullets(delta: float) -> void:
-	if not is_instance_valid(target):
-		return
-	if _boss_bullets_left <= 0:
-		_boss_reload_timer -= delta
-		if _boss_reload_timer <= 0.0:
-			_boss_bullets_left = 50
-			_boss_bullet_timer = 0.0
-		return
-	_boss_bullet_timer -= delta
-	if _boss_bullet_timer > 0.0:
-		return
-	_boss_bullet_timer = 0.3
-	_boss_bullets_left -= 1
-	special_requested.emit(self, "boss_bullet", target.global_position)
-	if _boss_bullets_left <= 0:
-		_boss_reload_timer = 5.0
+func apply_slow(multiplier: float, duration: float) -> void:
+	_slow_multiplier = min(_slow_multiplier, multiplier)
+	_slow_timer      = max(_slow_timer, duration)
 
 
-func _process_elite_bullet(delta: float) -> void:
-	if not is_instance_valid(target):
-		return
-	_elite_bullet_timer -= delta
-	if _elite_bullet_timer > 0.0:
-		return
-	_elite_bullet_timer = randf_range(6.0, 10.0)
-	special_requested.emit(self, "elite_bullet", target.global_position)
+func apply_burn(damage: float, duration: float) -> void:
+	_burn_ticks.append({"damage": damage, "timer": duration, "tick": 1.0})
 
 
-func _start_headhunter_dash_lock(direction: Vector2) -> void:
-	velocity = Vector2.ZERO
-	_headhunter_state = "lock"
-	_headhunter_timer = 1.0
-	_headhunter_dash_direction = direction
-	_headhunter_dash_hit = false
-	_headhunter_dash_start = global_position
-	_headhunter_dash_end = _headhunter_dash_start + direction * HEADHUNTER_DASH_DISTANCE
-	_headhunter_warning_clear_timer = -1.0
-	_show_skill_label("獵頭突刺")
-	_create_headhunter_warning_line()
+func apply_poison(damage: float, duration: float) -> void:
+	if _poison_ticks.size() >= 3:
+		_poison_ticks.pop_front()
+	_poison_ticks.append({"damage": damage, "timer": duration, "tick": 1.0})
+	apply_slow(0.85, duration)
 
 
-func _start_headhunter_sweep() -> void:
-	_headhunter_state = "sweep_prepare"
-	_headhunter_timer = HEADHUNTER_SWEEP_PREPARE_TIME
-	_show_skill_label("橫掃")
-	_create_headhunter_sweep_ring()
+# ── 場景警告圖形 ─────────────────────────────────────────────────────────────
 
-
-func _finish_headhunter_sweep() -> void:
-	_clear_headhunter_sweep_ring()
-	_create_headhunter_sweep_flash()
-	if is_instance_valid(target) and global_position.distance_to(target.global_position) <= HEADHUNTER_SWEEP_RADIUS:
-		if target.has_method("take_damage"):
-			target.take_damage(touch_damage)
-
-
-func _create_headhunter_warning_line() -> void:
-	_clear_headhunter_warning_line()
+func _spawn_circle_warning(center: Vector2, radius: float, color: Color,
+		delay: float, callback: Callable) -> void:
 	var parent := get_parent()
 	if parent == null:
 		return
-	_headhunter_warning_line = Line2D.new()
-	_headhunter_warning_line.width = HEADHUNTER_DASH_WIDTH
-	_headhunter_warning_line.default_color = Color(0.1, 1.0, 0.25, 0.5)
-	_headhunter_warning_line.points = PackedVector2Array([_headhunter_dash_start, _headhunter_dash_end])
-	parent.add_child(_headhunter_warning_line)
-
-
-func _clear_headhunter_warning_line() -> void:
-	if is_instance_valid(_headhunter_warning_line):
-		_headhunter_warning_line.queue_free()
-	_headhunter_warning_line = null
-	_headhunter_warning_clear_timer = -1.0
-
-
-func _create_headhunter_sweep_ring() -> void:
-	_clear_headhunter_sweep_ring()
-	var parent := get_parent()
-	if parent == null:
-		return
-	_headhunter_sweep_ring = _create_world_ring(global_position, HEADHUNTER_SWEEP_RADIUS, Color(0.1, 1.0, 0.25, 0.5), 8.0)
-	parent.add_child(_headhunter_sweep_ring)
-
-
-func _clear_headhunter_sweep_ring() -> void:
-	if is_instance_valid(_headhunter_sweep_ring):
-		_headhunter_sweep_ring.queue_free()
-	_headhunter_sweep_ring = null
-
-
-func _create_headhunter_sweep_flash() -> void:
-	var parent := get_parent()
-	if parent == null:
-		return
-	_clear_headhunter_sweep_flash()
-	_headhunter_sweep_flash = _create_world_ring(global_position, HEADHUNTER_SWEEP_RADIUS, Color(0.2, 1.0, 0.35, 0.82), 10.0)
-	parent.add_child(_headhunter_sweep_flash)
-	var tween := create_tween()
-	tween.tween_property(_headhunter_sweep_flash, "modulate:a", 0.0, 0.22)
-	tween.tween_callback(_clear_headhunter_sweep_flash)
-
-
-func _clear_headhunter_sweep_flash() -> void:
-	if is_instance_valid(_headhunter_sweep_flash):
-		_headhunter_sweep_flash.queue_free()
-	_headhunter_sweep_flash = null
-
-
-func _create_world_ring(center: Vector2, radius: float, color: Color, width: float) -> Line2D:
 	var ring := Line2D.new()
-	ring.width = width
-	ring.default_color = color
 	ring.closed = true
+	ring.width  = 5.0
+	ring.default_color = color
 	var points := PackedVector2Array()
-	for index in range(72):
-		var angle := TAU * float(index) / 72.0
-		points.append(center + Vector2(cos(angle), sin(angle)) * radius)
+	for i in range(72):
+		points.append(center + Vector2(cos(TAU * i / 72.0), sin(TAU * i / 72.0)) * radius)
 	ring.points = points
-	return ring
+	parent.add_child(ring)
+	var tween := create_tween()
+	tween.tween_interval(delay)
+	tween.tween_callback(func() -> void:
+		if callback.is_valid():
+			callback.call()
+		if is_instance_valid(ring):
+			ring.queue_free()
+	)
 
 
-func _try_dash_hit(damage_amount: int, radius: float, hit_flag: String, knockback := false) -> void:
-	var already_hit := _headhunter_dash_hit if hit_flag == "_headhunter_dash_hit" else _boss_dash_hit
-	if already_hit or not is_instance_valid(target):
+func _spawn_line_warning(start: Vector2, end: Vector2, width: float, color: Color,
+		delay: float, callback: Callable) -> void:
+	var parent := get_parent()
+	if parent == null:
 		return
-	if global_position.distance_to(target.global_position) > radius:
-		return
-	if target.has_method("take_damage"):
-		target.take_damage(damage_amount)
-	if knockback:
-		target.global_position += _boss_dash_direction * 72.0
-	if hit_flag == "_headhunter_dash_hit":
-		_headhunter_dash_hit = true
-	else:
-		_boss_dash_hit = true
-
-
-func _try_path_hit(damage_amount: int, segment_start: Vector2, segment_end: Vector2, path_width: float, hit_flag: String, knockback := false) -> void:
-	var already_hit := _headhunter_dash_hit if hit_flag == "_headhunter_dash_hit" else _boss_dash_hit
-	if already_hit or not is_instance_valid(target):
-		return
-	if _distance_to_segment(target.global_position, segment_start, segment_end) > path_width * 0.5:
-		return
-	if target.has_method("take_damage"):
-		target.take_damage(damage_amount)
-	if knockback:
-		target.global_position += _boss_dash_direction * 72.0
-	if hit_flag == "_headhunter_dash_hit":
-		_headhunter_dash_hit = true
-	else:
-		_boss_dash_hit = true
+	var line := Line2D.new()
+	line.width         = width
+	line.default_color = color
+	line.points        = PackedVector2Array([start, end])
+	parent.add_child(line)
+	var tween := create_tween()
+	tween.tween_interval(delay)
+	tween.tween_callback(func() -> void:
+		if callback.is_valid():
+			callback.call()
+		if is_instance_valid(line):
+			line.queue_free()
+	)
 
 
 func _distance_to_segment(point: Vector2, segment_start: Vector2, segment_end: Vector2) -> float:
-	var segment := segment_end - segment_start
+	var segment        := segment_end - segment_start
 	var length_squared := segment.length_squared()
 	if length_squared <= 0.001:
 		return point.distance_to(segment_start)
@@ -394,117 +523,121 @@ func _distance_to_segment(point: Vector2, segment_start: Vector2, segment_end: V
 	return point.distance_to(segment_start + segment * t)
 
 
-func scale_combat_stats(multiplier: float) -> void:
-	max_health = int(round(max_health * multiplier))
-	health = min(max_health, max(1, int(round(float(health) * multiplier))))
-	touch_damage = max(1, int(round(float(touch_damage) * multiplier)))
+# ── 攻擊預警形狀（本地座標，跟隨敵人）────────────────────────────────────────
+
+func _rect_warning_points(dir: Vector2, length: float, width: float) -> PackedVector2Array:
+	var perp   := dir.rotated(PI * 0.5)
+	var half_w := width * 0.5
+	return PackedVector2Array([
+		perp * half_w,
+		dir * length + perp * half_w,
+		dir * length - perp * half_w,
+		-perp * half_w
+	])
 
 
-func scale_stats(multiplier: float) -> void:
-	scale_combat_stats(multiplier)
-	xp_value = int(round(xp_value * multiplier))
+func _fan_warning_points(dir: Vector2, radius: float, angle_deg: float) -> PackedVector2Array:
+	var pts        := PackedVector2Array()
+	pts.append(Vector2.ZERO)
+	var half_rad   := deg_to_rad(angle_deg * 0.5)
+	var base_angle := dir.angle()
+	var steps      := 24
+	for i in range(steps + 1):
+		var a := base_angle - half_rad + deg_to_rad(angle_deg) * float(i) / float(steps)
+		pts.append(Vector2(cos(a), sin(a)) * radius)
+	return pts
 
 
-func apply_slow(multiplier: float, duration: float) -> void:
-	_slow_multiplier = clamp(multiplier, 0.1, 1.0)
-	_slow_timer = max(_slow_timer, duration)
-
-
-func set_spawn_inactive(duration: float) -> void:
-	_spawn_inactive_timer = max(duration, 0.0)
-	modulate.a = 0.5 if _spawn_inactive_timer > 0.0 else 1.0
-
-
-func _current_speed() -> float:
-	return speed * _slow_multiplier
-
-
-func _show_skill_label(text: String) -> void:
-	_skill_label_text = text
-	_skill_label_timer = 2.0
-	queue_redraw()
-
-
-func take_damage(amount: int) -> void:
-	health -= amount
-	damaged.emit(enemy_kind, amount)
-	_hit_flash_timer = 0.08
-	queue_redraw()
-
-	if health <= 0:
-		_clear_headhunter_effects()
-		died.emit(global_position, xp_value, enemy_kind)
-		queue_free()
-
-
-func _exit_tree() -> void:
-	_clear_headhunter_effects()
-
-
-func _clear_headhunter_effects() -> void:
-	_clear_headhunter_warning_line()
-	_clear_headhunter_sweep_ring()
-	_clear_headhunter_sweep_flash()
+func _load_texture() -> void:
+	var path := "res://AIgame_rougelike/assets/art/enemies/%s/%s.png"
+	match enemy_id:
+		"friend":
+			_texture = load(path % ["friend",     "friend"])
+		"shooter":
+			_texture = load(path % ["shooter",    "shooter"])
+		"hoodlum":
+			_texture = load(path % ["hoodlum",    "hoodlum"])
+		"aluminum":
+			_texture = load(path % ["aluminum",   "aluminum"])
+		"hacker":
+			_texture = load(path % ["hacker",     "hacker"])
+		"patriot":
+			_texture = load(path % ["patriot",    "patriot"])
+		"headhunter":
+			_texture = load("res://AIgame_rougelike/assets/art/enemies/headhunter/green_triangle.png")
+		"boss_mid", "boss_final":
+			_texture = load("res://AIgame_rougelike/assets/art/enemies/boss/orange_market_crash_core.png")
+		_:
+			_texture = load(path % ["retail", "retail"])
 
 
 func _draw() -> void:
-	var color := Color(0.95, 0.2, 0.16)
-	if enemy_kind == "elite":
-		color = Color(0.85, 0.22, 1.0)
-	elif enemy_kind == "headhunter":
-		color = Color(0.12, 0.95, 0.28)
-	elif enemy_kind == "boss" or enemy_kind == "small_boss":
-		color = Color(1.0, 0.55, 0.08)
-	elif enemy_kind == "stage_boss":
-		color = Color(0.95, 0.05, 0.05)
+	var radius := 16.0 * scale_multiplier
+	var tint   := Color.WHITE
 	if _hit_flash_timer > 0.0:
-		color = Color(1.0, 0.9, 0.65)
+		tint = Color(1.0, 0.88, 0.72)
 
-	var body_radius := 14.0
-	if enemy_kind == "elite":
-		body_radius = 18.0
-	elif enemy_kind == "headhunter":
-		body_radius = HEADHUNTER_BODY_RADIUS
-	elif enemy_kind == "boss" or enemy_kind == "small_boss":
-		body_radius = BOSS_BODY_RADIUS
-	elif enemy_kind == "stage_boss":
-		body_radius = 36.0
-
-	var texture := normal_texture
-	if enemy_kind == "elite":
-		texture = elite_texture
-	elif enemy_kind == "headhunter":
-		texture = headhunter_texture
-	elif enemy_kind == "boss" or enemy_kind == "small_boss" or enemy_kind == "stage_boss":
-		texture = boss_texture
-
-	if texture != null:
-		var texture_size := body_radius * 2.55
-		if enemy_kind == "boss" or enemy_kind == "small_boss":
-			texture_size = body_radius * 2.7
-		elif enemy_kind == "stage_boss":
-			texture_size = body_radius * 2.8
-		draw_texture_rect(texture, Rect2(Vector2(-texture_size * 0.5, -texture_size * 0.5), Vector2(texture_size, texture_size)), false, color.lightened(0.12) if _hit_flash_timer > 0.0 else Color.WHITE)
-		if enemy_kind == "headhunter":
-			draw_string(chinese_font, Vector2(-22.0, -34.0), "獵頭", HORIZONTAL_ALIGNMENT_LEFT, 48.0, 14, Color(0.85, 1.0, 0.85))
-		elif enemy_kind == "boss":
-			draw_string(chinese_font, Vector2(-18.0, -44.0), "boss", HORIZONTAL_ALIGNMENT_LEFT, 48.0, 14, Color(1.0, 0.88, 0.5))
-	elif enemy_kind == "headhunter":
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(0.0, -body_radius),
-			Vector2(body_radius * 0.9, body_radius * 0.72),
-			Vector2(-body_radius * 0.9, body_radius * 0.72)
-		]), color)
-		draw_string(chinese_font, Vector2(-22.0, -34.0), "獵頭", HORIZONTAL_ALIGNMENT_LEFT, 48.0, 14, Color(0.85, 1.0, 0.85))
+	# 角色圖像
+	if _texture != null:
+		var size := radius * 3.0
+		draw_texture_rect(_texture,
+			Rect2(Vector2(-size * 0.5, -size * 0.5), Vector2(size, size)), false, tint)
 	else:
-		draw_circle(Vector2.ZERO, body_radius, color)
-		draw_circle(Vector2(-4.0, -3.0), 3.0, Color(0.22, 0.04, 0.04))
-		draw_circle(Vector2(4.0, -3.0), 3.0, Color(0.22, 0.04, 0.04))
-		if enemy_kind == "boss":
-			draw_string(chinese_font, Vector2(-18.0, -44.0), "boss", HORIZONTAL_ALIGNMENT_LEFT, 48.0, 14, Color(1.0, 0.88, 0.5))
+		draw_circle(Vector2.ZERO, radius, Color(0.95, 0.2, 0.16))
 
-	var health_ratio: float = clamp(float(health) / float(max_health), 0.0, 1.0)
-	draw_rect(Rect2(Vector2(-16.0, -25.0), Vector2(32.0, 4.0)), Color(0.18, 0.02, 0.02))
-	draw_rect(Rect2(Vector2(-16.0, -25.0), Vector2(32.0 * health_ratio, 4.0)), Color(0.4, 1.0, 0.32))
-	if _skill_label_timer > 0.0 and not _skill_label_text.is_empty():
-		draw_string(chinese_font, Vector2(-44.0, -52.0), _skill_label_text, HORIZONTAL_ALIGNMENT_LEFT, 120.0, 16, Color(1.0, 0.92, 0.2))
+	# 名稱標籤
+	if _font != null:
+		draw_string(_font, Vector2(-34, -radius - 22), display_name,
+			HORIZONTAL_ALIGNMENT_CENTER, 68, 13, Color(1, 1, 1))
+
+	# 血量條
+	var ratio: float = clamp(health / max(0.001, max_health), 0.0, 1.0)
+	draw_rect(Rect2(Vector2(-22, -radius - 10), Vector2(44, 4)), Color(0.18, 0.02, 0.02))
+	draw_rect(Rect2(Vector2(-22, -radius - 10), Vector2(44.0 * ratio, 4)), Color(0.35, 1.0, 0.3))
+
+	# ── 攻擊預警（集氣 / 衝刺期間，以本地座標顯示在地板上）──────────────
+	if attack_type == "melee" and \
+			(_ma_state == "charge" or _ma_state == "lunge") and \
+			_ma_attack_dir.length() > 0.001:
+		var charge_ratio: float
+		if _ma_state == "charge":
+			charge_ratio = clamp(_ma_timer / max(0.001, _ma_charge_time), 0.0, 1.0)
+		else:
+			charge_ratio = 1.0
+		var preview_alpha: float = lerpf(0.18, 0.50, charge_ratio)
+		var fill_col: Color = Color(1.0, 0.15, 0.15, preview_alpha)
+		var edge_col: Color = Color(1.0, 0.10, 0.10, minf(preview_alpha * 1.6, 0.85))
+		var range_px  := _ma_range_tiles * TILE_SIZE
+		var width_px  := _ma_width_tiles * TILE_SIZE
+		match _ma_shape:
+			"rect":
+				var pts := _rect_warning_points(_ma_attack_dir, range_px, width_px)
+				draw_colored_polygon(pts, fill_col)
+				draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[3], pts[0]]),
+					edge_col, 2.0)
+			"fan":
+				var pts := _fan_warning_points(_ma_attack_dir, range_px, _ma_fan_angle)
+				draw_colored_polygon(pts, fill_col)
+				draw_polyline(pts, edge_col, 2.0, true)
+			"circle":
+				draw_circle(Vector2.ZERO, range_px, fill_col)
+				draw_arc(Vector2.ZERO, range_px, 0.0, TAU, 64, edge_col, 2.0)
+
+	# ── 集氣條（攻擊集氣 / 技能集氣）─────────────────────────────────────
+	var charge_pct  := 0.0
+	var show_charge := false
+	if _ma_state == "charge" and _ma_charge_time > 0.0:
+		charge_pct  = _ma_timer / _ma_charge_time
+		show_charge = true
+	elif _ma_state == "lunge":
+		charge_pct  = 1.0
+		show_charge = true
+	elif _skill_charging and _skill_charge_max > 0.0:
+		charge_pct  = _skill_charge_timer / _skill_charge_max
+		show_charge = true
+	if show_charge:
+		draw_rect(Rect2(Vector2(-22, -radius - 20), Vector2(44, 6)),
+			Color(0.08, 0.08, 0.08, 0.8))
+		draw_rect(Rect2(Vector2(-22, -radius - 20),
+			Vector2(44.0 * clamp(charge_pct, 0.0, 1.0), 6)),
+			Color(1.0, 0.78, 0.08, 0.95))
