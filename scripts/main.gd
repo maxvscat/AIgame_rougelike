@@ -73,7 +73,7 @@ var stage_theme_defs := [
 const TERRAIN_TEX_DIR := "res://AIgame_rougelike/assets/art/map/terrain/"
 var _terrain_tex_cache: Dictionary = {}   # 地圖貼圖快取（地板/背景）
 var _decor_rocks: Array = []              # 每關裝飾岩石 [{"pos", "size", "seed"}]，純視覺不阻擋
-const TERRAIN_MUD_SLOW := 0.70        # 泥沼移動倍率（2026-07-07 調整：0.55→0.70，減速變溫和）
+const TERRAIN_MUD_SLOW := 0.30        # 泥沼移動倍率（2026-07-07 調整：0.55→0.30）
 const TERRAIN_ICE_SPEED := 1.50       # 冰面移動倍率（1.35→1.50）
 const TERRAIN_FIRE_ENEMY_DPS := 3.0   # 火焰對敵人每秒傷害（8→3）
 const TERRAIN_FIRE_PLAYER_TICK := 1.5 # 火焰對玩家扣血間隔（秒）
@@ -3056,7 +3056,7 @@ func _apply_on_hit_skills(enemy: Node2D, base_damage: float, skills: Dictionary,
 				continue
 			if frost_center.distance_to(frost_target.global_position) > frost_radius:
 				continue
-			frost_target.apply_slow(0.70, 2.0)
+			frost_target.apply_slow(0.30, 2.0)
 			if rng.randf() < 0.10:
 				frost_target.apply_slow(0.02, 2.0)
 			frost_target.take_damage(frost_dmg)
