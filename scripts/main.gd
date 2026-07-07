@@ -191,9 +191,9 @@ var enemy_defs := {
 	"hacker":     {"id": "hacker",     "name": "耗客",    "hp":  50.0, "attack_type": "melee",  "range": 1.3,  "aps": 0.75, "speed": 122.0, "scale": 8.0, "skill": "jump_slash",    "skill_cd": 10.0},
 	"patriot":    {"id": "patriot",    "name": "阻國人",  "hp":  80.0, "attack_type": "melee",  "range": 5.0,  "aps": 1.0,  "speed": 112.0, "scale": 5.0, "skill": "laser",         "skill_cd": 7.0},
 	"headhunter": {"id": "headhunter", "name": "獵頭",    "hp":  65.0, "attack_type": "melee",  "range": 1.2,  "aps": 1.0,  "speed": 112.0, "scale": 3.0, "skill": "jump_slash",    "skill_cd": 7.0},
-	"boss_lv1":   {"id": "boss_lv1",   "name": "殲滅者",  "hp": 182.0, "attack_type": "ranged", "range": 8.0,  "aps": 0.8,  "speed": 200.0, "scale": 4.0, "skill": "laser",         "skill_cd": 6.0},
-	"boss_lv2":   {"id": "boss_lv2",   "name": "審判機甲","hp": 260.0, "attack_type": "ranged", "range": 8.0,  "aps": 1.0,  "speed": 257.4, "scale": 4.2, "skill": "laser",         "skill_cd": 5.0},
-	"boss_lv3":   {"id": "boss_lv3",   "name": "核心主腦","hp": 420.0, "attack_type": "ranged", "range": 8.0,  "aps": 1.2,  "speed":  54.0, "scale": 4.6, "skill": "laser",         "skill_cd": 4.0}
+	"boss_lv1":   {"id": "boss_lv1",   "name": "殲滅者",  "hp": 2184.0, "attack_type": "ranged", "range": 8.0,  "aps": 0.8,  "speed": 200.0, "scale": 4.0, "skill": "laser",         "skill_cd": 6.0},
+	"boss_lv2":   {"id": "boss_lv2",   "name": "審判機甲","hp": 3120.0, "attack_type": "ranged", "range": 8.0,  "aps": 1.0,  "speed": 257.4, "scale": 4.2, "skill": "laser",         "skill_cd": 5.0},
+	"boss_lv3":   {"id": "boss_lv3",   "name": "核心主腦","hp": 5040.0, "attack_type": "ranged", "range": 8.0,  "aps": 1.2,  "speed":  54.0, "scale": 4.6, "skill": "laser",         "skill_cd": 4.0}
 }
 
 var stage_defs := [
