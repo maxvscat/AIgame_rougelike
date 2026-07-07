@@ -1,0 +1,759 @@
+{
+  "characters": {
+    "warrior": {
+      "name": "戰士",
+      "enabled": false,
+      "attack_damage": 13,
+      "move_speed": 260,
+      "attack_range_tiles": 3,
+      "attacks_per_second": 1,
+      "crit_chance": 0,
+      "skill_area_bonus": 0
+    },
+    "archer": {
+      "name": "槍手",
+      "enabled": true,
+      "attack_damage": 10,
+      "move_speed": 260,
+      "attack_range_tiles": 5,
+      "attacks_per_second": 3,
+      "crit_chance": 0.1,
+      "skill_area_bonus": 0,
+      "attack_move_multiplier": 0.2
+    },
+    "mage": {
+      "name": "法師",
+      "enabled": false,
+      "attack_damage": 11,
+      "move_speed": 260,
+      "attack_range_tiles": 5,
+      "attacks_per_second": 0.5,
+      "crit_chance": 0,
+      "skill_area_bonus": 0.2
+    }
+  },
+  "difficulty": {
+    "normal": {
+      "name": "一般",
+      "enemy_multiplier": 1,
+      "player_hearts": 5
+    },
+    "hard": {
+      "name": "困難",
+      "enemy_multiplier": 1.5,
+      "player_hearts": 4
+    },
+    "expert": {
+      "name": "專家",
+      "enemy_multiplier": 2.5,
+      "player_hearts": 3
+    }
+  },
+  "enemies": {
+    "retail": {
+      "name": "散戶",
+      "hp": 40,
+      "speed": 85.8,
+      "range": 1.65,
+      "aps": 0.25,
+      "scale": 4
+    },
+    "friend": {
+      "name": "街友",
+      "hp": 80,
+      "speed": 76,
+      "range": 2.7,
+      "aps": 0.5,
+      "scale": 4,
+      "skill_cd": 8
+    },
+    "shooter": {
+      "name": "射畜",
+      "hp": 100,
+      "speed": 66,
+      "range": 8,
+      "aps": 0.5,
+      "scale": 4
+    },
+    "hoodlum": {
+      "name": "89",
+      "hp": 120,
+      "speed": 70,
+      "range": 8,
+      "aps": 1,
+      "scale": 4,
+      "skill_cd": 15
+    },
+    "aluminum": {
+      "name": "鋁布",
+      "hp": 200,
+      "speed": 109,
+      "range": 2,
+      "aps": 0.5,
+      "scale": 5.4,
+      "skill_cd": 5
+    },
+    "hacker": {
+      "name": "耗客",
+      "hp": 500,
+      "speed": 122,
+      "range": 1.3,
+      "aps": 0.75,
+      "scale": 8,
+      "skill_cd": 10
+    },
+    "patriot": {
+      "name": "阻國人",
+      "hp": 800,
+      "speed": 112,
+      "range": 5,
+      "aps": 1,
+      "scale": 5,
+      "skill_cd": 7
+    },
+    "headhunter": {
+      "name": "獵頭",
+      "hp": 650,
+      "speed": 112,
+      "range": 1.2,
+      "aps": 1,
+      "scale": 3,
+      "skill_cd": 7
+    },
+    "boss_mid": {
+      "name": "中型Boss",
+      "hp": 2600,
+      "speed": 48,
+      "range": 8,
+      "aps": 1,
+      "scale": 4,
+      "skill_cd": 5
+    },
+    "boss_final": {
+      "name": "最終Boss",
+      "hp": 4200,
+      "speed": 54,
+      "range": 8,
+      "aps": 1.2,
+      "scale": 4,
+      "skill_cd": 4
+    }
+  },
+  "skills": {
+    "dice_crit": {
+      "name": "致命骰",
+      "school": "骰子",
+      "desc": "爆擊傷害加成，最高300%。\n骰子系共通被動：+30% 爆擊率，多個骰子技能不疊加。",
+      "values": {
+        "crit_bonus_pct": [
+          0,
+          50,
+          100,
+          150,
+          200,
+          250,
+          300
+        ]
+      }
+    },
+    "dice_execute": {
+      "name": "三倍骰",
+      "school": "骰子",
+      "desc": "2倍爆擊後蓄勢，下一次攻擊必定造成 3 倍爆擊。冷卻 6 秒，每升 1 級 -1 秒。\n骰子系共通被動：+30% 爆擊率，多個骰子技能不疊加。",
+      "values": {
+        "cooldown_s": [
+          0,
+          6,
+          5,
+          4,
+          3,
+          2,
+          1
+        ]
+      }
+    },
+    "dice_first": {
+      "name": "先手骰",
+      "school": "骰子",
+      "desc": "攻擊血量 50% 以上的敵人時額外加爆擊率，最高加90%爆擊率。\n（對精英/Boss 效果減半）\n骰子系共通被動：+30% 爆擊率，多個骰子技能不疊加。",
+      "values": {
+        "bonus_pct": [
+          0,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ]
+      }
+    },
+    "dice_blast": {
+      "name": "爆炸骰",
+      "school": "骰子",
+      "desc": "爆擊時有機率在原地放置固定6格地雷圈，2秒後引爆，最高80%觸發機率，引爆傷害最高370%。\n骰子系共通被動：+30% 爆擊率，多個骰子技能不疊加。",
+      "values": {
+        "trigger_chance_pct": [
+          0,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80
+        ],
+        "mine_damage_pct": [
+          0,
+          70,
+          130,
+          190,
+          250,
+          310,
+          370
+        ]
+      }
+    },
+    "dice_last": {
+      "name": "絕命骰",
+      "school": "骰子",
+      "desc": "每少 1 顆愛心，爆擊率 +20%（隨等級提升每顆加成更多）。\n骰子系共通被動：+30% 爆擊率，多個骰子技能不疊加。",
+      "values": {
+        "per_heart_pct": [
+          0,
+          20,
+          25,
+          30,
+          35,
+          40,
+          45
+        ]
+      }
+    },
+    "dice_hot": {
+      "name": "傷害骰",
+      "school": "骰子",
+      "desc": "爆擊後 3 秒內提升所有傷害，最高提升300%。\n骰子系共通被動：持有任一骰子技能即固定 +30% 爆擊率，多個骰子技能不疊加累加。",
+      "values": {
+        "bonus_pct": [
+          0,
+          50,
+          100,
+          150,
+          200,
+          250,
+          300
+        ]
+      }
+    },
+    "tech_frost": {
+      "name": "冷卻",
+      "school": "科技",
+      "desc": "攻擊命中後，以目標為中心對 3 格範圍內所有敵人造成同等冰霜傷害，並緩速 2 秒，並有機率完全冰凍，最高100%傷害。",
+      "values": {
+        "damage_pct": [
+          0,
+          20,
+          35,
+          50,
+          65,
+          80,
+          100
+        ]
+      }
+    },
+    "tech_fire": {
+      "name": "過載",
+      "school": "科技",
+      "desc": "攻擊使目標燃燒，持續 4 秒每秒造成 DoT 傷害，最高70%傷害。",
+      "values": {
+        "dot_pct": [
+          0,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70
+        ]
+      }
+    },
+    "tech_poison": {
+      "name": "病毒",
+      "school": "科技",
+      "desc": "攻擊附加毒素，最多疊 3 層，持續 4 秒，最高35%傷害。",
+      "values": {
+        "dot_pct": [
+          0,
+          10,
+          15,
+          20,
+          25,
+          30,
+          35
+        ]
+      }
+    },
+    "tech_lightning": {
+      "name": "高壓電",
+      "school": "科技",
+      "desc": "命中時觸發鏈式閃電，依等級跳躍不同次數，最高65%傷害，跳躍4次。",
+      "values": {
+        "damage_pct": [
+          0,
+          15,
+          25,
+          35,
+          45,
+          55,
+          65
+        ],
+        "jump_count": [
+          0,
+          2,
+          2,
+          3,
+          3,
+          4,
+          4
+        ],
+        "jump_range_tiles": [
+          0,
+          1.5,
+          2,
+          2.5,
+          3,
+          3.5,
+          4
+        ]
+      }
+    },
+    "tech_meltdown": {
+      "name": "熔毀",
+      "school": "科技",
+      "desc": "攻擊命中後，在目標位置延遲 0.5 秒引爆，對範圍內所有敵人造成傷害，最高60%傷害。",
+      "cooldown": 2,
+      "values": {
+        "damage_pct": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60
+        ],
+        "range_tiles": [
+          0,
+          5.5,
+          5.5,
+          5.5,
+          5.5,
+          5.5,
+          5.5
+        ],
+        "delay": 0.5
+      }
+    },
+    "tech_magnet": {
+      "name": "磁暴",
+      "school": "科技",
+      "desc": "觸發磁場，吸引範圍內敵人並造成傷害，最高70%傷害。\nBoss 不受吸引。",
+      "cooldown": 5,
+      "values": {
+        "range_tiles": [
+          0,
+          4,
+          4.5,
+          5,
+          5.5,
+          6,
+          7
+        ],
+        "damage_pct": [
+          0,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70
+        ]
+      }
+    },
+    "poker_heart": {
+      "name": "紅心牌",
+      "school": "樸克",
+      "desc": "抽中後提高玩家閃避率，持續到下次抽牌。最高90%閃避率。",
+      "values": {
+        "bonus_pct": [
+          0,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ]
+      }
+    },
+    "poker_spade": {
+      "name": "黑桃牌",
+      "school": "樸克",
+      "desc": "抽中後攻擊傷害提升，持續到下次抽牌，最高120%傷害。",
+      "values": {
+        "bonus_pct": [
+          0,
+          20,
+          40,
+          60,
+          80,
+          100,
+          120
+        ]
+      }
+    },
+    "poker_diamond": {
+      "name": "鑽石牌",
+      "school": "樸克",
+      "desc": "抽中後爆擊傷害提升，持續到下次抽牌，最高300%爆傷。",
+      "values": {
+        "bonus_mult": [
+          0,
+          0.5,
+          1,
+          1.5,
+          2,
+          2.5,
+          3
+        ]
+      }
+    },
+    "poker_club": {
+      "name": "梅花牌",
+      "school": "樸克",
+      "desc": "抽中後攻速提升，持續到下次抽牌，最高350%攻速。",
+      "values": {
+        "bonus_pct": [
+          0,
+          100,
+          150,
+          200,
+          250,
+          300,
+          350
+        ]
+      }
+    },
+    "poker_joker": {
+      "name": "小丑牌",
+      "school": "樸克",
+      "desc": "抽中後，攻擊命中敵人時會為該敵人附加 6 秒易傷詛咒，使牠在詛咒期間受到的所有傷害（含砲台、DOT、大四喜/海底撈月/清一色等）都提高，最高+180%易傷。",
+      "values": {
+        "bonus_pct": [
+          0,
+          30,
+          60,
+          90,
+          120,
+          150,
+          180
+        ]
+      }
+    },
+    "poker_guard": {
+      "name": "皇家牌",
+      "school": "樸克",
+      "desc": "抽中時召喚護衛，攻擊最近敵人，最多3隻；抽到新牌時護衛會被清除，需再次抽到才會重召。",
+      "values": {
+        "count": [
+          0,
+          1,
+          2,
+          3,
+          3,
+          3,
+          3
+        ],
+        "damage_multiplier": [
+          0,
+          0.5,
+          0.6,
+          0.7,
+          0.8,
+          0.9,
+          1
+        ]
+      }
+    },
+    "mahjong_sanyuan": {
+      "name": "八仙過海",
+      "school": "麻將",
+      "desc": "每 5 秒從天上砸下 8 張麻將牌轟炸隨機敵人，每張牌造成 50% 傷害（隨等級提升）。場上只剩 1 隻敵人時 8 張全打他，但第 2 張起傷害逐張減半。",
+      "values": {
+        "damage_pct": [
+          0,
+          50,
+          60,
+          70,
+          85,
+          100,
+          120
+        ]
+      }
+    },
+    "mahjong_sixi": {
+      "name": "大四喜",
+      "school": "麻將",
+      "desc": "4 張麻將磁磚繞玩家旋轉，接觸敵人持續造成傷害，最高150%傷害。",
+      "values": {
+        "damage_pct": [
+          0,
+          50,
+          70,
+          90,
+          110,
+          130,
+          150
+        ]
+      }
+    },
+    "mahjong_pong": {
+      "name": "碰碰胡",
+      "school": "麻將",
+      "desc": "每次攻擊後，對 3 格內其他敵人各造成 100% 傷害，最多影響6個敵人。",
+      "values": {
+        "target_count": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      }
+    },
+    "mahjong_moon": {
+      "name": "海底撈月",
+      "school": "麻將",
+      "desc": "丟出麻將牌至最遠目標後飛回，來回路徑上的敵人各受一次攻擊傷害，最多6顆220%傷害。",
+      "values": {
+        "damage_pct": [
+          0,
+          80,
+          100,
+          130,
+          150,
+          180,
+          220
+        ],
+        "return_speed_multiplier": 5,
+        "tile_count": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      }
+    },
+    "mahjong_wall": {
+      "name": "門清",
+      "school": "麻將",
+      "desc": "自動抵擋一次傷害（護盾），冷卻後再次就緒。"
+    },
+    "mahjong_flush": {
+      "name": "清一色",
+      "school": "麻將",
+      "desc": "每 5 秒對 6 格內所有敵人造成傷害，發動時繞玩家旋轉劈出旋風斬特效，最高300%傷害。",
+      "cooldown": 5,
+      "values": {
+        "damage_pct": [
+          0,
+          100,
+          130,
+          160,
+          200,
+          250,
+          300
+        ]
+      }
+    },
+    "fish_rapid": {
+      "name": "連射砲",
+      "school": "魚機",
+      "desc": "熱鍵 1。放置連射砲台，每 0.3 秒射擊最近敵人，最高200%傷害，最高等級可放置3台。",
+      "cooldown": 15,
+      "values": {
+        "dmg_pct": [
+          0,
+          100,
+          120,
+          150,
+          170,
+          185,
+          200
+        ],
+        "range": [
+          0,
+          5,
+          5,
+          5.5,
+          5.5,
+          6,
+          6
+        ],
+        "turret_count": [
+          0,
+          1,
+          1,
+          2,
+          2,
+          3,
+          3
+        ]
+      }
+    },
+    "fish_fire": {
+      "name": "火焰砲",
+      "school": "魚機",
+      "desc": "熱鍵 2。放置火焰砲台，爆發式扇形噴火，最高傷害60%。",
+      "cooldown": 15,
+      "values": {
+        "dmg_pct": [
+          0,
+          60,
+          60,
+          60,
+          60,
+          60,
+          60
+        ],
+        "range": [
+          0,
+          2,
+          2.5,
+          3,
+          3.5,
+          4,
+          4.5
+        ]
+      }
+    },
+    "fish_saw": {
+      "name": "鋸齒砲",
+      "school": "魚機",
+      "desc": "熱鍵 3。放置鋸齒砲台，砲管持續自轉，最高傷害60%。",
+      "cooldown": 15,
+      "values": {
+        "dmg_pct": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60
+        ],
+        "range": [
+          0,
+          2.5,
+          2.5,
+          2.5,
+          2.5,
+          2.5,
+          2.5
+        ]
+      }
+    },
+    "fish_missile": {
+      "name": "導彈砲",
+      "school": "魚機",
+      "desc": "熱鍵 4。放置導彈砲台，每 2 秒發射追蹤導彈，最高等級16顆導彈，每顆160%傷害。",
+      "cooldown": 15,
+      "values": {
+        "dmg_pct": [
+          0,
+          100,
+          100,
+          130,
+          130,
+          160,
+          160
+        ],
+        "count": [
+          0,
+          3,
+          5,
+          7,
+          9,
+          11,
+          13
+        ],
+        "range": [
+          0,
+          8,
+          8,
+          8,
+          8,
+          8,
+          8
+        ]
+      }
+    },
+    "fish_laser": {
+      "name": "雷射砲",
+      "school": "魚機",
+      "desc": "熱鍵 5。放置雷射砲台，每 3 秒發射貫穿雷射，命中路徑所有敵人，最高500%傷害。",
+      "cooldown": 15,
+      "values": {
+        "dmg_pct": [
+          0,
+          100,
+          150,
+          200,
+          300,
+          400,
+          500
+        ],
+        "range": [
+          0,
+          10,
+          10,
+          10,
+          10,
+          10,
+          10
+        ]
+      }
+    },
+    "fish_chain": {
+      "name": "電流砲",
+      "school": "魚機",
+      "desc": "熱鍵 6。放置電流砲台，砲台本身不轉動，每 0.5 秒對敵人發射綠色電流，最高120%傷害。",
+      "cooldown": 15,
+      "values": {
+        "damage_multiplier": [
+          0,
+          0.7,
+          0.7,
+          0.8,
+          0.9,
+          1,
+          1.2
+        ],
+        "range": [
+          0,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6
+        ]
+      }
+    }
+  }
+}

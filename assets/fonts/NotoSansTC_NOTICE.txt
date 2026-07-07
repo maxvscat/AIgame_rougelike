@@ -1,0 +1,8 @@
+Noto Sans CJK TC Regular
+
+Bundled for Godot UI rendering, especially Web export.
+License: SIL Open Font License 1.1.
+Source: Google Noto Fonts.
+License reference: https://openfontlicense.org/open-font-license-official-text/
+
+This font is included as a project asset so Web builds do not rely on system fonts.
