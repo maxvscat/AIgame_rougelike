@@ -73,6 +73,12 @@ var stage_theme_defs := [
 const TERRAIN_TEX_DIR := "res://AIgame_rougelike/assets/art/map/terrain/"
 var _terrain_tex_cache: Dictionary = {}   # 地圖貼圖快取（地板/背景）
 var _decor_rocks: Array = []              # 每關裝飾岩石 [{"pos", "size", "seed"}]，純視覺不阻擋
+
+# ── Boss 血條與登場演出 ──
+var _boss_bar: Control = null
+var _boss_name_label: Label = null
+var _active_boss: Node2D = null
+var _boss_hp_ratio := 1.0
 const TERRAIN_MUD_SLOW := 0.30        # 泥沼移動倍率（2026-07-07 調整：0.55→0.30）
 const TERRAIN_ICE_SPEED := 1.50       # 冰面移動倍率（1.35→1.50）
 const TERRAIN_FIRE_ENEMY_DPS := 3.0   # 火焰對敵人每秒傷害（8→3）
@@ -185,41 +191,42 @@ var enemy_defs := {
 	"hacker":     {"id": "hacker",     "name": "耗客",    "hp":  50.0, "attack_type": "melee",  "range": 1.3,  "aps": 0.75, "speed": 122.0, "scale": 8.0, "skill": "jump_slash",    "skill_cd": 10.0},
 	"patriot":    {"id": "patriot",    "name": "阻國人",  "hp":  80.0, "attack_type": "melee",  "range": 5.0,  "aps": 1.0,  "speed": 112.0, "scale": 5.0, "skill": "laser",         "skill_cd": 7.0},
 	"headhunter": {"id": "headhunter", "name": "獵頭",    "hp":  65.0, "attack_type": "melee",  "range": 1.2,  "aps": 1.0,  "speed": 112.0, "scale": 3.0, "skill": "jump_slash",    "skill_cd": 7.0},
-	"boss_mid":   {"id": "boss_mid",   "name": "中型Boss","hp": 260.0, "attack_type": "ranged", "range": 8.0,  "aps": 1.0,  "speed":  257.4, "scale": 4.0, "skill": "laser",         "skill_cd": 5.0},
-	"boss_final": {"id": "boss_final", "name": "最終Boss","hp": 420.0, "attack_type": "ranged", "range": 8.0,  "aps": 1.2,  "speed":  54.0, "scale": 4.0, "skill": "laser",         "skill_cd": 4.0}
+	"boss_lv1":   {"id": "boss_lv1",   "name": "殲滅者",  "hp": 182.0, "attack_type": "ranged", "range": 8.0,  "aps": 0.8,  "speed": 200.0, "scale": 4.0, "skill": "laser",         "skill_cd": 6.0},
+	"boss_lv2":   {"id": "boss_lv2",   "name": "審判機甲","hp": 260.0, "attack_type": "ranged", "range": 8.0,  "aps": 1.0,  "speed": 257.4, "scale": 4.2, "skill": "laser",         "skill_cd": 5.0},
+	"boss_lv3":   {"id": "boss_lv3",   "name": "核心主腦","hp": 420.0, "attack_type": "ranged", "range": 8.0,  "aps": 1.2,  "speed":  54.0, "scale": 4.6, "skill": "laser",         "skill_cd": 4.0}
 }
 
 var stage_defs := [
 	{"retail": 15},
 	{"retail": 30},
-	{"retail": 50, "friend": 10},
-	{"friend": 20, "retail": 40},
-	{"shooter": 10, "retail": 40},
-	{"shooter": 15, "friend": 20},
-	{"shooter": 20, "retail": 50},
+	{"retail": 35, "friend": 5},
+	{"retail": 30, "friend": 10},
+	{"shooter": 5, "retail": 25},
+	{"shooter": 8, "friend": 12},
+	{"shooter": 10, "retail": 30},
+	{"hoodlum": 3, "shooter": 10},
+	{"headhunter": 1, "hoodlum": 4, "friend": 15},
+	{"boss_lv1": 1},
+	{"aluminum": 6, "retail": 40},
+	{"aluminum": 8, "friend": 20},
 	{"hoodlum": 6, "shooter": 15},
-	{"hoodlum": 8, "friend": 25},
-	{"headhunter": 5},
-	{"aluminum": 10, "retail": 60},
-	{"aluminum": 15, "friend": 25},
-	{"hoodlum": 10, "shooter": 20},
-	{"aluminum": 20, "shooter": 20},
-	{"headhunter": 10, "power": 1.5},
-	{"hacker": 6, "friend": 40},
-	{"hacker": 8, "shooter": 20},
-	{"hacker": 10, "aluminum": 20},
-	{"hoodlum": 12, "hacker": 8},
-	{"headhunter": 10, "power": 2.5},
-	{"patriot": 3, "shooter": 30},
-	{"patriot": 4, "aluminum": 25},
-	{"patriot": 5, "hacker": 10},
-	{"patriot": 6, "hoodlum": 12},
-	{"boss_mid": 1},
-	{"patriot": 7, "hacker": 12},
-	{"patriot": 8, "aluminum": 30},
-	{"patriot": 10, "hoodlum": 15},
-	{"patriot": 12, "hacker": 15, "aluminum": 20},
-	{"boss_final": 1}
+	{"aluminum": 12, "shooter": 15},
+	{"headhunter": 2, "aluminum": 10, "friend": 20},
+	{"hacker": 4, "friend": 30},
+	{"hacker": 5, "shooter": 18},
+	{"hacker": 6, "aluminum": 15},
+	{"headhunter": 2, "hoodlum": 8, "hacker": 5},
+	{"boss_lv2": 1},
+	{"patriot": 2, "shooter": 25},
+	{"patriot": 3, "aluminum": 20},
+	{"headhunter": 2, "patriot": 3, "hacker": 6},
+	{"patriot": 4, "hoodlum": 10},
+	{"headhunter": 3, "aluminum": 20, "hacker": 8},
+	{"patriot": 5, "shooter": 20, "hoodlum": 6},
+	{"headhunter": 3, "patriot": 5, "aluminum": 20},
+	{"patriot": 6, "hacker": 10, "hoodlum": 8},
+	{"headhunter": 4, "patriot": 7, "hacker": 10, "aluminum": 15},
+	{"boss_lv3": 1}
 ]
 
 var skill_defs := {}
@@ -772,6 +779,29 @@ func _create_ui() -> void:
 	skill_bar.mouse_filter = Control.MOUSE_FILTER_PASS
 	hud_layer.add_child(skill_bar)
 
+	# ── Boss 大血條（技能欄上方，Boss 在場時顯示）──
+	_boss_bar = Control.new()
+	_boss_bar.visible = false
+	_boss_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_boss_bar.anchor_left = 0.17
+	_boss_bar.anchor_right = 0.83
+	_boss_bar.anchor_top = 1.0
+	_boss_bar.anchor_bottom = 1.0
+	_boss_bar.offset_top = -176.0
+	_boss_bar.offset_bottom = -146.0
+	_boss_bar.offset_left = 0.0
+	_boss_bar.offset_right = 0.0
+	hud_layer.add_child(_boss_bar)
+	_boss_bar.draw.connect(_draw_boss_bar)
+	_boss_name_label = Label.new()
+	_boss_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_boss_name_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_boss_name_label.offset_top = -34.0
+	_boss_name_label.offset_bottom = -4.0
+	_boss_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_apply_game_font(_boss_name_label, 24, Color(1.0, 0.85, 0.35), 4)
+	_boss_bar.add_child(_boss_name_label)
+
 	main_menu_overlay = _make_overlay()
 	_make_menu(main_menu_overlay, "爆倉倖存者：AI末日777", [
 		["開始遊戲", Callable(self, "_start_run").bind("archer")],
@@ -884,7 +914,7 @@ func _create_audio() -> void:
 		"tech_lightning_1", "tech_lightning_2", "tech_lightning_3",
 		"turret_chain_1", "turret_chain_2", "turret_chain_3",
 		"ui_select", "level_up", "poker_draw", "stage_start", "stage_clear",
-		"mahjong_sixi", "mahjong_moon"
+		"mahjong_sixi", "mahjong_moon", "boss_alarm"
 	]
 	var base_path := "res://AIgame_rougelike/assets/audio/sfx/"
 	for sname in sfx_names:
@@ -2218,6 +2248,272 @@ func _process_camera_shake(delta: float) -> void:
 		_game_camera.offset = Vector2.ZERO
 
 
+func _boss_spawn_position() -> Vector2:
+	# Boss 生成點：玩家附近 5 格的隨機方向（夾在地圖內），有地面預警圈可提前站位
+	if player == null or not is_instance_valid(player):
+		return _random_spawn_position()
+	var pos := player.global_position + Vector2.RIGHT.rotated(rng.randf_range(0.0, TAU)) * 5.0 * TILE_SIZE
+	pos.x = clampf(pos.x, map_rect.position.x + 200.0, map_rect.end.x - 200.0)
+	pos.y = clampf(pos.y, map_rect.position.y + 200.0, map_rect.end.y - 200.0)
+	return pos
+
+
+func _register_boss(boss: Node2D) -> void:
+	_active_boss = boss
+	if _boss_bar != null:
+		_boss_bar.visible = true
+		_boss_hp_ratio = 1.0
+		_boss_bar.queue_redraw()
+	if _boss_name_label != null:
+		_boss_name_label.text = str(boss.get("display_name"))
+
+
+func _boss_sky_drop(boss: Node2D, land_pos: Vector2) -> void:
+	# Boss 天降進場：從畫面上方高速墜落，落地衝擊波＋強震動
+	boss.set("active", false)   # 落地前不行動
+	boss.global_position = land_pos + Vector2(0.0, -900.0)
+	var tween := create_tween()
+	tween.set_pause_mode(Tween.TWEEN_PAUSE_STOP)
+	tween.tween_property(boss, "global_position", land_pos, 0.55).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.tween_callback(func() -> void:
+		if not is_instance_valid(boss):
+			return
+		boss.set("active", true)
+		_camera_shake_strength = 14.0
+		_spawn_circle_effect(land_pos, 2.6 * TILE_SIZE, Color(1.0, 0.55, 0.15, 0.5), 0.35, func() -> void: pass)
+		_spawn_circle_effect(land_pos, 1.4 * TILE_SIZE, Color(1.0, 0.85, 0.4, 0.6), 0.25, func() -> void: pass)
+		_play_sfx_limited("enemy_die", 0.5, 0.5, 0.15)   # 低音悶擊充當落地聲
+	)
+
+
+func _draw_boss_bar() -> void:
+	if _boss_bar == null:
+		return
+	var sz := _boss_bar.size
+	# 外框（深底＋金邊，仿參考圖的 Boss 感）
+	_boss_bar.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.05, 0.03, 0.12, 0.94))
+	_boss_bar.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.9, 0.65, 0.15, 0.95), false, 3.0)
+	# 血量填充（桃紅）
+	var pad := 5.0
+	var fill_w: float = maxf(0.0, (sz.x - pad * 2.0) * _boss_hp_ratio)
+	if fill_w > 0.5:
+		_boss_bar.draw_rect(Rect2(Vector2(pad, pad), Vector2(fill_w, sz.y - pad * 2.0)), Color(0.88, 0.15, 0.45, 1.0))
+		# 上緣高光
+		_boss_bar.draw_rect(Rect2(Vector2(pad, pad), Vector2(fill_w, 4.0)), Color(1.0, 0.5, 0.7, 0.8))
+	# 左右端飾（小菱形）
+	for side in [-1.0, 1.0]:
+		var cx := (0.0 - 14.0) if side < 0.0 else (sz.x + 14.0)
+		_boss_bar.draw_colored_polygon(PackedVector2Array([
+			Vector2(cx, sz.y * 0.5 - 12.0), Vector2(cx + 9.0, sz.y * 0.5),
+			Vector2(cx, sz.y * 0.5 + 12.0), Vector2(cx - 9.0, sz.y * 0.5)
+		]), Color(0.9, 0.65, 0.15, 0.95))
+
+
+# ── Boss 登場警告演出（回傳演出秒數，Boss 於演出結束後天降）─────────────────
+
+func _play_boss_intro(stage_number: int) -> float:
+	var duration := 2.0
+	if stage_number >= 30:
+		duration = 3.6
+	elif stage_number >= 20:
+		duration = 2.5
+	if ui_canvas == null:
+		return duration
+	var overlay := Control.new()
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.process_mode = Node.PROCESS_MODE_PAUSABLE
+	ui_canvas.add_child(overlay)
+	if stage_number >= 30:
+		_boss_intro_lv3(overlay)
+	elif stage_number >= 20:
+		_boss_intro_lv2(overlay)
+	else:
+		_boss_intro_lv1(overlay)
+	var cleanup := get_tree().create_timer(duration, false, false, true)
+	cleanup.timeout.connect(func() -> void:
+		if is_instance_valid(overlay):
+			overlay.queue_free()
+		if hud_layer != null and is_instance_valid(hud_layer):
+			hud_layer.modulate.a = 1.0   # 保險：恢復 UI
+	)
+	return duration
+
+
+func _make_intro_band(overlay: Control, band_color: Color, stripe_color: Color) -> Control:
+	# 畫面中段警示帶：上下細條＋半透明底
+	var band := Control.new()
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	band.anchor_left = 0.0
+	band.anchor_right = 1.0
+	band.anchor_top = 0.32
+	band.anchor_bottom = 0.32
+	band.offset_top = 0.0
+	band.offset_bottom = 130.0
+	overlay.add_child(band)
+	var bg := ColorRect.new()
+	bg.color = band_color
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	band.add_child(bg)
+	for edge_top in [true, false]:
+		var stripe := ColorRect.new()
+		stripe.color = stripe_color
+		stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		stripe.anchor_right = 1.0
+		if edge_top:
+			stripe.offset_bottom = 6.0
+		else:
+			stripe.anchor_top = 1.0
+			stripe.anchor_bottom = 1.0
+			stripe.offset_top = -6.0
+		band.add_child(stripe)
+	return band
+
+
+func _make_intro_label(parent: Control, text: String, font_size: int, color: Color, y_offset: float) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	label.offset_top = y_offset
+	label.offset_bottom = y_offset + float(font_size) + 16.0
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_apply_game_font(label, font_size, color, 6)
+	parent.add_child(label)
+	return label
+
+
+func _boss_intro_lv1(overlay: Control) -> void:
+	# 黃黑警示條＋WARNING＋警報聲2次＋螢幕邊緣橘紅閃爍（約2秒）
+	var band := _make_intro_band(overlay, Color(0.05, 0.05, 0.05, 0.82), Color(1.0, 0.8, 0.1, 0.95))
+	_make_intro_label(band, "⚠ WARNING ⚠", 50, Color(1.0, 0.82, 0.1), 12.0)
+	_make_intro_label(band, "殲滅者 正在接近", 28, Color(1.0, 1.0, 1.0), 78.0)
+	# 邊緣橘紅閃爍
+	var flash := ColorRect.new()
+	flash.color = Color(1.0, 0.35, 0.05, 0.0)
+	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(flash)
+	overlay.move_child(flash, 0)
+	var ft := create_tween()
+	ft.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	ft.set_loops(2)
+	ft.tween_property(flash, "color:a", 0.26, 0.4)
+	ft.tween_property(flash, "color:a", 0.0, 0.4)
+	_play_sfx("boss_alarm", 1.0)
+	var t2 := get_tree().create_timer(0.9, false, false, true)
+	t2.timeout.connect(func() -> void: _play_sfx("boss_alarm", 1.0))
+
+
+func _boss_intro_lv2(overlay: Control) -> void:
+	# 紅色 DANGER＋地圖短暫變暗＋準星掃向玩家＋警報加速（約2.5秒）
+	var dim := ColorRect.new()
+	dim.color = Color(0.0, 0.0, 0.0, 0.0)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(dim)
+	var dt := create_tween()
+	dt.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	dt.tween_property(dim, "color:a", 0.45, 0.5)
+	dt.tween_interval(1.2)
+	dt.tween_property(dim, "color:a", 0.0, 0.6)
+	var band := _make_intro_band(overlay, Color(0.12, 0.0, 0.0, 0.85), Color(1.0, 0.12, 0.1, 0.95))
+	_make_intro_label(band, "‼ DANGER ‼", 52, Color(1.0, 0.15, 0.12), 12.0)
+	_make_intro_label(band, "審判機甲 已鎖定目標", 28, Color(1.0, 0.9, 0.9), 80.0)
+	# 準星掃向玩家（世界座標）
+	if player != null and is_instance_valid(player):
+		var reticle := Node2D.new()
+		reticle.add_to_group("transient_effects")
+		reticle.z_index = 40
+		add_child(reticle)
+		var ring := Line2D.new()
+		ring.closed = true
+		ring.width = 3.0
+		ring.default_color = Color(1.0, 0.15, 0.1, 0.95)
+		var ring_pts := PackedVector2Array()
+		for i in range(40):
+			ring_pts.append(Vector2(cos(TAU * i / 40.0), sin(TAU * i / 40.0)) * 46.0)
+		ring.points = ring_pts
+		reticle.add_child(ring)
+		for k in range(4):
+			var tick := Line2D.new()
+			tick.width = 3.0
+			tick.default_color = ring.default_color
+			var dir := Vector2.RIGHT.rotated(TAU * float(k) / 4.0)
+			tick.points = PackedVector2Array([dir * 34.0, dir * 58.0])
+			reticle.add_child(tick)
+		reticle.global_position = player.global_position + Vector2(rng.randf_range(-500.0, 500.0), -420.0)
+		var rt := create_tween()
+		rt.set_pause_mode(Tween.TWEEN_PAUSE_STOP)
+		rt.tween_property(reticle, "global_position", player.global_position, 0.9).set_ease(Tween.EASE_OUT)
+		rt.tween_property(reticle, "modulate", Color(1.0, 0.0, 0.0, 1.0), 0.15)
+		rt.tween_property(reticle, "modulate:a", 0.0, 0.5)
+		rt.tween_callback(func() -> void:
+			if is_instance_valid(reticle):
+				reticle.queue_free()
+		)
+	# 警報加速：3 聲、間隔 0.55 秒、音調略高
+	for i in range(3):
+		var at := get_tree().create_timer(0.1 + 0.55 * float(i), false, false, true)
+		at.timeout.connect(func() -> void: _play_sfx("boss_alarm", 1.25))
+
+
+func _boss_intro_lv3(overlay: Control) -> void:
+	# SYSTEM ERROR → 權限接管 → 黑屏 → 最終威脅降臨；黑紅故障、亂碼、低頻警報（約3.6秒）
+	var blackout := ColorRect.new()
+	blackout.color = Color(0.0, 0.0, 0.0, 0.0)
+	blackout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	blackout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(blackout)
+	var glitch_label := _make_intro_label(overlay, "SYSTEM ERROR", 54, Color(1.0, 0.12, 0.1), 220.0)
+	# 黑屏節奏：閃爍 → 半暗 → 2.4~3.0 秒全黑 → 揭示
+	var bt := create_tween()
+	bt.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	bt.tween_property(blackout, "color:a", 0.85, 0.08)
+	bt.tween_property(blackout, "color:a", 0.25, 0.10)
+	bt.tween_property(blackout, "color:a", 0.7, 0.08)
+	bt.tween_property(blackout, "color:a", 0.35, 0.10)
+	bt.tween_interval(1.9)
+	bt.tween_property(blackout, "color:a", 1.0, 0.15)
+	bt.tween_interval(0.45)
+	bt.tween_property(blackout, "color:a", 0.0, 0.5)
+	# UI 短暫失靈（閃爍後保證恢復）
+	if hud_layer != null:
+		var ht := create_tween()
+		ht.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		ht.tween_property(hud_layer, "modulate:a", 0.15, 0.12)
+		ht.tween_property(hud_layer, "modulate:a", 1.0, 0.12)
+		ht.tween_property(hud_layer, "modulate:a", 0.3, 0.12)
+		ht.tween_property(hud_layer, "modulate:a", 1.0, 0.15)
+	# 亂碼跳動與階段文字
+	var glitch_chars := "!@#$%&*<>/\\|░▓█01"
+	for step in range(30):
+		var st := get_tree().create_timer(0.1 * float(step), false, false, true)
+		var elapsed := 0.1 * float(step)
+		st.timeout.connect(func() -> void:
+			if not is_instance_valid(glitch_label):
+				return
+			var base_text := "SYSTEM ERROR"
+			if elapsed >= 2.9:
+				base_text = "最終威脅降臨"
+				glitch_label.add_theme_color_override("font_color", Color(1.0, 0.25, 0.2))
+			elif elapsed >= 1.2:
+				base_text = "控制權限遭到接管"
+			# 隨機替換 0~2 個字元成亂碼
+			var chars := base_text.split("")
+			for _g in range(rng.randi_range(0, 2)):
+				var gi := rng.randi_range(0, chars.size() - 1)
+				chars[gi] = glitch_chars[rng.randi_range(0, glitch_chars.length() - 1)]
+			glitch_label.text = "".join(chars)
+			glitch_label.position.x += rng.randf_range(-3.0, 3.0)
+		)
+	# 低頻警報 2 聲
+	_play_sfx("boss_alarm", 0.55)
+	var lt := get_tree().create_timer(1.5, false, false, true)
+	lt.timeout.connect(func() -> void: _play_sfx("boss_alarm", 0.5))
+
+
 func _show_boss_skill_banner(text: String) -> void:
 	# Boss 發動技能時的畫面上方技能名稱橫幅（例：「召喚增援！」），快速彈出後淡出
 	if ui_canvas == null:
@@ -2372,21 +2668,28 @@ func _start_stage_with_preview(stage_number: int) -> void:
 	_stage_preview_positions.clear()
 	var stage_def: Dictionary = stage_defs[stage_number - 1]
 	var power := float(stage_def.get("power", 1.0))
+	var has_boss := false
 	for key in stage_def.keys():
 		if key == "power":
 			continue
+		if str(key).begins_with("boss"):
+			has_boss = true
 		for _i in range(int(stage_def[key])):
-			# 中型Boss（boss_mid）需求：生成時出現在玩家「當前腳下」，並在原地顯示生成預警，
-			# 讓玩家有 3 秒反應時間離開，而不是跟其他小怪一樣隨機出現在場邊。
-			var pos := player.global_position if str(key) == "boss_mid" and player != null and is_instance_valid(player) else _random_spawn_position()
+			# Boss：生成在玩家附近 5 格處（地面預警圈），非腳下也非場邊
+			var pos := _boss_spawn_position() if str(key).begins_with("boss") else _random_spawn_position()
 			spawn_list.append({"id": str(key), "pos": pos, "power": power})
 			_stage_preview_positions.append(pos)
 			_add_spawn_warning(pos)
+	# Boss 關：登場警告演出（10關 WARNING 2秒／20關 DANGER 2.5秒／30關 SYSTEM ERROR 3.6秒），
+	# 地面預警同步顯示，演出結束 Boss 天降進場
+	var wait_time := 3.0
+	if has_boss:
+		wait_time = _play_boss_intro(stage_number)
 	_stage_previewing = true
-	_stage_preview_timer = 3.0          # 倒計時，_process 每幀遞減
+	_stage_preview_timer = wait_time    # 倒計時，_process 每幀遞減
 	queue_redraw()
-	# 3秒後正式生成怪物（不暫停遊戲，玩家可正常行動）
-	var timer := get_tree().create_timer(3.0)
+	# 預警結束後正式生成怪物（不暫停遊戲，玩家可正常行動）
+	var timer := get_tree().create_timer(wait_time)
 	timer.timeout.connect(func() -> void:
 		if not game_started or is_game_ended or current_stage != stage_number:
 			_clear_stage_spawn_warnings()
@@ -2435,6 +2738,10 @@ func _spawn_wave_enemy(enemy_id: String, pos: Vector2, power := 1.0) -> void:
 	enemy.global_position = pos
 	enemy.died.connect(_on_enemy_died)
 	enemy.attack_projectile_requested.connect(_spawn_enemy_bullet)
+	# Boss：註冊大血條並以「天降」方式進場
+	if enemy_id.begins_with("boss"):
+		_register_boss(enemy)
+		_boss_sky_drop(enemy, pos)
 	enemy.dot_damage_occurred.connect(func(dot_pos: Vector2, amount: float) -> void:
 		_show_damage_number(dot_pos, amount, false)
 		# DOT（燃燒／毒素）每次造成傷害都算「玩家的傷害來源」，小丑牌啟用時一併觸發/刷新易傷詛咒
@@ -2459,10 +2766,12 @@ func _on_enemy_died(_enemy: Node2D) -> void:
 	if _enemy != null:
 		enemy_id = str(_enemy.get("enemy_id"))
 	match enemy_id:
-		"boss_mid":
-			_add_total_chips(1, "中型Boss擊破：+%d 晶片")
-		"boss_final":
-			_add_total_chips(3, "最終Boss擊破：+%d 晶片")
+		"boss_lv1":
+			_add_total_chips(1, "殲滅者擊破：+%d 晶片")
+		"boss_lv2":
+			_add_total_chips(2, "審判機甲擊破：+%d 晶片")
+		"boss_lv3":
+			_add_total_chips(3, "核心主腦擊破：+%d 晶片")
 		_:
 			# 普通敵人：僅在每 10 殺時輕量存檔
 			if kill_count % 10 == 0:
@@ -2956,7 +3265,7 @@ func _apply_player_hit(enemy: Node2D, attack_data: Dictionary) -> void:
 		var first_lv: int = int(skills["dice_first"])
 		var first_bonus: float = _skill_level_value("dice_first", "bonus_pct", [0, 20, 35, 50, 65, 80, 95], first_lv) / 100.0
 		var eid: String = str(enemy.enemy_id)
-		if eid == "headhunter" or eid == "boss_mid" or eid == "boss_final":
+		if eid == "headhunter" or eid.begins_with("boss"):
 			first_bonus *= 0.5
 		if float(enemy.health) > float(enemy.max_health) * 0.5:
 			crit_rate += first_bonus
@@ -4028,6 +4337,14 @@ func _get_skill_max_cooldown(skill_id: String) -> float:
 func _update_ui() -> void:
 	if player == null or not is_instance_valid(player):
 		return
+	# Boss 大血條
+	if _boss_bar != null:
+		if _active_boss != null and is_instance_valid(_active_boss):
+			_boss_hp_ratio = clampf(float(_active_boss.health) / maxf(0.001, float(_active_boss.max_health)), 0.0, 1.0)
+			_boss_bar.queue_redraw()
+		elif _boss_bar.visible:
+			_boss_bar.visible = false
+			_active_boss = null
 	# 血量
 	var hearts := ""
 	for _hi in range(player.health):

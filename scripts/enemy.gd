@@ -304,8 +304,8 @@ func _process_movement_and_attack(delta: float) -> void:
 			move_and_slide()
 			return
 		var attack_range := attack_range_tiles * TILE_SIZE
-		if enemy_id == "boss_mid":
-			# 中型Boss需求：邊朝玩家移動邊射擊，不像一般遠程怪要先停下來才開火
+		if enemy_id == "boss_lv1" or enemy_id == "boss_lv2":
+			# 機動型Boss：邊朝玩家移動邊射擊，不像一般遠程怪要先停下來才開火
 			if distance > contact_radius + 12.0:
 				velocity = direction * move_speed * _slow_multiplier * terrain_speed_multiplier
 			else:
@@ -451,7 +451,7 @@ func _check_melee_hit() -> bool:
 
 func apply_knockback(direction: Vector2, distance: float) -> void:
 	# Boss 完全免疫；精英怪（獵頭/愛國者/駭客）擊退距離減為 45%（原本完全免疫，改為仍有回饋感）
-	if ["boss_mid", "boss_final"].has(enemy_id):
+	if enemy_id.begins_with("boss"):
 		return
 	if _jump_state != "chase":
 		return  # 跳砍過程（Tween 控制位置）不受擊退，避免位置錯亂
@@ -468,7 +468,7 @@ func apply_knockback(direction: Vector2, distance: float) -> void:
 
 func apply_knockdown(duration: float) -> void:
 	# 爆擊擊倒：倒地無法行動。Boss 免疫；精英怪時間縮短；內建 3 秒冷卻防無限控場
-	if ["boss_mid", "boss_final"].has(enemy_id):
+	if enemy_id.begins_with("boss"):
 		return
 	if _knockdown_cd > 0.0 or _jump_state != "chase":
 		return
@@ -510,8 +510,8 @@ func _process_skill(delta: float) -> void:
 		"jump_slash":
 			_start_jump_slash()
 		"laser":
-			# Boss：雷射與拉霸機交錯使用
-			if enemy_id == "boss_mid" or enemy_id == "boss_final":
+			# Boss：雷射與拉霸機交錯使用（LV1 冷卻6秒→每12秒spin一次）
+			if enemy_id.begins_with("boss"):
 				_boss_skill_toggle = not _boss_skill_toggle
 				if _boss_skill_toggle:
 					_start_boss_slot()
@@ -619,12 +619,12 @@ func _fire_random_lasers() -> void:
 	# 雷射改良：原本兩道全隨機方向，常常整輪都打不到玩家、毫無威脅也毫無記憶點。
 	# 改為第一道必定瞄準玩家當前位置（仍有 1 秒預警可躲），其餘隨機補場面；
 	# 最終 Boss 三道（第二道瞄準玩家 ±35 度扇區）。發射瞬間有亮色光束特效與震動。
-	var laser_count := 3 if enemy_id == "boss_final" else 2
+	var laser_count := 3 if enemy_id == "boss_lv3" else 2
 	for i in range(laser_count):
 		var angle: float
 		if i == 0 and is_instance_valid(target):
 			angle = (target.global_position - global_position).angle()
-		elif i == 1 and enemy_id == "boss_final" and is_instance_valid(target):
+		elif i == 1 and enemy_id == "boss_lv3" and is_instance_valid(target):
 			angle = (target.global_position - global_position).angle() + deg_to_rad(randf_range(-35.0, 35.0))
 		else:
 			angle = randf_range(0.0, TAU)
@@ -748,15 +748,19 @@ func _start_boss_slot() -> void:
 		_fire_random_lasers()
 		return
 	var slot: Node2D = slot_script.new()
-	# 符號池與 Jackpot 加成：中Boss 池小、三同機率低；終Boss 全符號、三同機率高
+	# 符號池與 Jackpot 加成：LV1 只有 3 種攻擊符號；LV2 五種、三同機率低；LV3 全符號、三同機率高
 	var pool: Dictionary
 	var boost: float
-	if enemy_id == "boss_final":
-		pool = {"seven": 20, "bell": 20, "diamond": 18, "joker": 15, "cherry": 12, "skull": 15}
-		boost = 0.25
-	else:
-		pool = {"seven": 25, "bell": 25, "diamond": 20, "joker": 15, "cherry": 15}
-		boost = 0.08
+	match enemy_id:
+		"boss_lv1":
+			pool = {"seven": 34, "bell": 33, "diamond": 33}
+			boost = 0.06
+		"boss_lv3":
+			pool = {"seven": 20, "bell": 20, "diamond": 18, "joker": 15, "cherry": 12, "skull": 15}
+			boost = 0.25
+		_:
+			pool = {"seven": 25, "bell": 25, "diamond": 20, "joker": 15, "cherry": 15}
+			boost = 0.10
 	slot.setup(pool, boost, _font)
 	add_child(slot)
 	slot.position = Vector2(0.0, -(16.0 * scale_multiplier) * 1.6 - 78.0)
@@ -782,7 +786,7 @@ func _resolve_slot_results(results: Array) -> void:
 	else:
 		for s in results:
 			queue.append({"sym": str(s), "tier": 1})
-	var gap := 0.6 if enemy_id == "boss_final" else 0.8
+	var gap := 0.6 if enemy_id == "boss_lv3" else 0.8
 	var delay := 0.25
 	for entry in queue:
 		var sym: String = str(entry["sym"])
@@ -812,13 +816,21 @@ func _fire_slot_attack(sym: String, tier: int) -> void:
 					_boss_banner("雙重雷射！")
 					_slot_lasers(2, 28.0)
 				3:
-					_boss_banner("７７７ 雷射風暴！！")
-					_slot_laser_storm()
+					if enemy_id == "boss_lv1":
+						_boss_banner("７７７ 連續掃射！！")
+						_slot_laser_sweep(5)
+					else:
+						_boss_banner("７７７ 雷射風暴！！")
+						_slot_laser_storm()
 		"bell":
 			match tier:
 				1:
-					_boss_banner("彈幕圓陣！")
-					_slot_bullet_ring(12, 0.0)
+					if enemy_id == "boss_lv1":
+						_boss_banner("扇形彈幕！")
+						_slot_bullet_fan(8, 100.0)
+					else:
+						_boss_banner("彈幕圓陣！")
+						_slot_bullet_ring(12, 0.0)
 				2:
 					_boss_banner("彈幕加倍！")
 					_slot_bullet_ring(12, 0.0)
@@ -829,12 +841,14 @@ func _fire_slot_attack(sym: String, tier: int) -> void:
 					)
 				3:
 					_boss_banner("彈幕地獄！！")
+					# LV1：3 波 × 12 顆；LV2/LV3：3 波 × 16 顆
+					var wave_count := 12 if enemy_id == "boss_lv1" else 16
 					for wave in range(3):
 						var tw := get_tree().create_timer(0.45 * float(wave), false, false, true)
 						var wave_offset := float(wave) * 8.0
 						tw.timeout.connect(func() -> void:
 							if is_instance_valid(self) and health > 0.0:
-								_slot_bullet_ring(16, wave_offset)
+								_slot_bullet_ring(wave_count, wave_offset)
 						)
 		"diamond":
 			match tier:
@@ -845,9 +859,19 @@ func _fire_slot_attack(sym: String, tier: int) -> void:
 					_boss_banner("強化衝擊波！")
 					_slot_shockwave(3, 20.0)
 				3:
-					_boss_banner("全場震盪！！")
-					_slot_shockwave(3, 20.0)
-					_slot_random_blasts(6)
+					if enemy_id == "boss_lv1":
+						_boss_banner("全場環形衝擊！！")
+						# 3 道連續衝擊波（每 2 秒一道，缺口位置各自隨機）
+						for w in range(3):
+							var swt := get_tree().create_timer(2.0 * float(w), false, false, true)
+							swt.timeout.connect(func() -> void:
+								if is_instance_valid(self) and health > 0.0:
+									_slot_shockwave(4, 26.0)
+							)
+					else:
+						_boss_banner("全場震盪！！")
+						_slot_shockwave(3, 20.0)
+						_slot_random_blasts(6)
 		"joker":
 			match tier:
 				1:
@@ -929,6 +953,27 @@ func _slot_laser_storm() -> void:
 		)
 
 
+func _slot_laser_sweep(count: int) -> void:
+	# LV1 Jackpot：N 道連續掃射雷射——第一道瞄準玩家，其後每道旋轉 36 度、0.35 秒一道
+	var base := (target.global_position - global_position).angle() if is_instance_valid(target) else randf_range(0.0, TAU)
+	for i in range(count):
+		var t := get_tree().create_timer(0.35 * float(i), false, false, true)
+		var ang := base + deg_to_rad(36.0) * float(i)
+		t.timeout.connect(func() -> void:
+			if is_instance_valid(self) and health > 0.0:
+				_cast_laser_at_angle(ang)
+		)
+
+
+func _slot_bullet_fan(count: int, fan_deg: float) -> void:
+	# 扇形彈幕：以玩家方向為中心的扇形齊射
+	var base := (target.global_position - global_position).angle() if is_instance_valid(target) else randf_range(0.0, TAU)
+	for i in range(count):
+		var ang := base - deg_to_rad(fan_deg) * 0.5 + deg_to_rad(fan_deg) * float(i) / float(maxi(count - 1, 1))
+		var aim := global_position + Vector2.RIGHT.rotated(ang) * 200.0
+		attack_projectile_requested.emit(global_position, aim, 300.0)
+
+
 func _slot_bullet_ring(count: int, offset_deg: float) -> void:
 	for i in range(count):
 		var ang := TAU * float(i) / float(count) + deg_to_rad(offset_deg)
@@ -967,8 +1012,8 @@ func _slot_random_blasts(count: int) -> void:
 
 
 func _slot_summon_basic(tier: int) -> void:
-	# 單發：中Boss 6 散戶／終Boss 3 駭客；強化（兩同）：中 9 散戶／終 4 駭客
-	if enemy_id == "boss_final":
+	# 單發：LV2 召 6 散戶／LV3 召 3 駭客；強化（兩同）：LV2 9 散戶／LV3 4 駭客
+	if enemy_id == "boss_lv3":
 		var hacker_count := 3 if tier <= 1 else 4
 		for _i in range(hacker_count):
 			_summon_one("hacker")
@@ -1252,8 +1297,16 @@ func _load_texture() -> void:
 				_texture = load(path % ["patriot",    "patriot"])
 			"headhunter":
 				_texture = load("res://AIgame_rougelike/assets/art/enemies/headhunter/green_triangle.png")
-			"boss_mid", "boss_final":
-				_texture = load("res://AIgame_rougelike/assets/art/enemies/boss/orange_market_crash_core.png")
+			"boss_lv1", "boss_lv2", "boss_lv3":
+				# 三階 Boss 各自外觀（boss_lv1.png 等），缺檔時退回舊 Boss 圖
+				var boss_path := "res://AIgame_rougelike/assets/art/enemies/boss/%s.png" % enemy_id
+				if ResourceLoader.exists(boss_path):
+					_texture = load(boss_path)
+				elif FileAccess.file_exists(boss_path):
+					var boss_img := Image.load_from_file(boss_path)
+					_texture = ImageTexture.create_from_image(boss_img) if boss_img != null else null
+				if _texture == null:
+					_texture = load("res://AIgame_rougelike/assets/art/enemies/boss/orange_market_crash_core.png")
 			_:
 				_texture = load(path % ["retail", "retail"])
 		_shared_texture_cache[enemy_id] = _texture
